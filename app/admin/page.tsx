@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { AdminNav } from "@/components/AdminNav";
 import { requireOwner } from "@/lib/auth/owner";
+import { createRepairOrderFromRequest } from "./repair-orders/actions";
 import { signOutOwner, updateRequestStatus } from "./actions";
 
 export const metadata = {
@@ -46,21 +48,41 @@ type RequestRow = {
   } | null;
 };
 
-function label(status: Status) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+type RepairOrderLink = {
+  id: string;
+  ro_number: string;
+  status: string;
+  service_request_id: string | null;
+};
+
+function label(status: string) {
+  return status.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export default async function AdminPage() {
   const { supabase, user } = await requireOwner();
-  const { data, error } = await supabase
-    .from("service_requests")
-    .select(
-      "id,status,complaint,known_codes,prior_work,service_location,preferred_time,urgency,created_at,customers(full_name,phone,email,company_name),vehicles(year,make,model,vin,mileage,unit_number)"
-    )
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const [{ data, error }, { data: repairOrderData }] = await Promise.all([
+    supabase
+      .from("service_requests")
+      .select(
+        "id,status,complaint,known_codes,prior_work,service_location,preferred_time,urgency,created_at,customers(full_name,phone,email,company_name),vehicles(year,make,model,vin,mileage,unit_number)"
+      )
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("repair_orders")
+      .select("id,ro_number,status,service_request_id")
+      .not("service_request_id", "is", null),
+  ]);
 
   const requests = (data || []) as unknown as RequestRow[];
+  const repairOrders = (repairOrderData || []) as RepairOrderLink[];
+  const roByRequest = new Map(
+    repairOrders
+      .filter((ro) => ro.service_request_id)
+      .map((ro) => [ro.service_request_id as string, ro])
+  );
+
   const counts = statuses.reduce<Record<Status, number>>((result, status) => {
     result[status] = requests.filter((item) => item.status === status).length;
     return result;
@@ -69,11 +91,11 @@ export default async function AdminPage() {
   return (
     <main className="admin-page">
       <div className="shell">
-        <header className="admin-header">
+        <header className="admin-header compact-admin-header">
           <div>
             <div className="eyebrow">Owner operations</div>
-            <h1>Command center.</h1>
-            <p className="section-copy">Live service requests and workflow status.</p>
+            <h1>Service requests</h1>
+            <p className="section-copy">Review incoming complaints, contact customers, and convert accepted work into a repair order.</p>
           </div>
           <div className="admin-account">
             <span>{user.email}</span>
@@ -83,6 +105,8 @@ export default async function AdminPage() {
             <Link href="/">Public website →</Link>
           </div>
         </header>
+
+        <AdminNav current="requests" />
 
         <section className="admin-stats">
           {statuses.slice(0, 7).map((status) => (
@@ -111,6 +135,7 @@ export default async function AdminPage() {
           {requests.map((request) => {
             const customer = request.customers;
             const vehicle = request.vehicles;
+            const repairOrder = roByRequest.get(request.id);
             const vehicleName = vehicle
               ? `${vehicle.year || ""} ${vehicle.make} ${vehicle.model}`.trim()
               : "Vehicle unavailable";
@@ -127,15 +152,27 @@ export default async function AdminPage() {
                     <h2>{vehicleName}</h2>
                     <p>{customer?.full_name || "Unknown customer"}</p>
                   </div>
-                  <form action={updateRequestStatus} className="status-form">
-                    <input type="hidden" name="requestId" value={request.id} />
-                    <select name="nextStatus" defaultValue={request.status}>
-                      {statuses.map((status) => (
-                        <option value={status} key={status}>{label(status)}</option>
-                      ))}
-                    </select>
-                    <button className="button secondary" type="submit">Update</button>
-                  </form>
+                  <div className="request-actions">
+                    <form action={updateRequestStatus} className="status-form">
+                      <input type="hidden" name="requestId" value={request.id} />
+                      <select name="nextStatus" defaultValue={request.status}>
+                        {statuses.map((status) => (
+                          <option value={status} key={status}>{label(status)}</option>
+                        ))}
+                      </select>
+                      <button className="button secondary" type="submit">Update</button>
+                    </form>
+                    {repairOrder ? (
+                      <Link className="button" href={`/admin/repair-orders/${repairOrder.id}`}>
+                        Open {repairOrder.ro_number}
+                      </Link>
+                    ) : (
+                      <form action={createRepairOrderFromRequest}>
+                        <input type="hidden" name="requestId" value={request.id} />
+                        <button className="button" type="submit">Create repair order</button>
+                      </form>
+                    )}
+                  </div>
                 </div>
 
                 <div className="request-grid">
@@ -158,7 +195,7 @@ export default async function AdminPage() {
                 </div>
 
                 <div className="request-notes">
-                  <strong>Complaint</strong>
+                  <strong>Customer complaint</strong>
                   <p>{request.complaint}</p>
                   {request.known_codes ? <p><strong>Codes:</strong> {request.known_codes}</p> : null}
                   {request.prior_work ? <p><strong>Prior work:</strong> {request.prior_work}</p> : null}
