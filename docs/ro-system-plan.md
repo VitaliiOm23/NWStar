@@ -20,11 +20,12 @@ The repair-order system tracks the full path from the original customer complain
 
 ## Supabase setup
 
-The base schema must already be installed. Then run this complete migration in Supabase SQL Editor:
+The base schema must already be installed. Then run these migrations in Supabase SQL Editor in this order:
 
-`supabase/migrations/20260805_repair_order_system.sql`
+1. `supabase/migrations/20260805_repair_order_system.sql`
+2. `supabase/migrations/20260805_repair_order_system_hardening.sql`
 
-The migration is designed to preserve the existing customer, vehicle, service-request, and owner-login data.
+Supabase CLI and the GitHub migration integration run both files automatically in filename order. The migrations preserve the existing customer, vehicle, service-request, and owner-login data.
 
 ## First use
 
@@ -41,4 +42,4 @@ The migration is designed to preserve the existing customer, vehicle, service-re
 
 ## Payment processing
 
-The first release includes the complete invoice and payment ledger plus a hosted-payment URL field. Card information is never stored in Supabase. Actual card entry should remain on a PCI-compliant hosted page such as Stripe Checkout, Stripe Hosted Invoice Page, Square Invoice, or another processor selected by the business.
+The first release includes the complete invoice and payment ledger plus a hosted-payment URL field. Card information is never stored in Supabase. Actual card entry remains on a PCI-compliant hosted page such as Stripe Checkout, Stripe Hosted Invoice Page, Square Invoice, or another processor selected by the business.
