@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireOwner } from "@/lib/auth/owner";
 
 const allowedStatuses = new Set([
@@ -34,4 +35,10 @@ export async function updateRequestStatus(formData: FormData) {
   }
 
   revalidatePath("/admin");
+}
+
+export async function signOutOwner() {
+  const { supabase } = await requireOwner();
+  await supabase.auth.signOut();
+  redirect("/login");
 }
