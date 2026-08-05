@@ -4,7 +4,7 @@ import { SiteHeader } from "./SiteHeader";
 
 export function PublicShell({ eyebrow, title, intro, children }: { eyebrow: string; title: string; intro: string; children: ReactNode }) {
   return (
-    <main>
+    <main className="public-site">
       <SiteHeader />
       <section className="page-hero">
         <div className="shell page-hero-grid">
@@ -25,7 +25,11 @@ export function CtaBand() {
   return (
     <section className="cta-band">
       <div className="shell cta-band-inner">
-        <div><div className="eyebrow">Ready to diagnose it properly?</div><h2>Start with the complaint. Finish with evidence.</h2></div>
+        <div>
+          <div className="eyebrow">Need service?</div>
+          <h2>Send the vehicle details for review.</h2>
+          <p>The request form keeps the complaint, location and vehicle information together.</p>
+        </div>
         <a className="button" href="/request-service">Request Service</a>
       </div>
     </section>
