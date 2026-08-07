@@ -1,7 +1,14 @@
 import { PublicShell } from "../../components/PublicShell";
 import { ServiceRequestForm } from "../../components/ServiceRequestForm";
 
-export default function RequestServicePage() {
+type RequestServicePageProps = {
+  searchParams: Promise<{ concern?: string }>;
+};
+
+export default async function RequestServicePage({ searchParams }: RequestServicePageProps) {
+  const { concern } = await searchParams;
+  const initialComplaint = typeof concern === "string" ? concern.slice(0, 300) : "";
+
   return (
     <PublicShell
       eyebrow="Request service"
@@ -26,7 +33,7 @@ export default function RequestServicePage() {
               <p>The request is reviewed first. We contact you to clarify the concern, confirm the scope and discuss scheduling. Submitting the form does not create a confirmed appointment.</p>
             </div>
           </aside>
-          <ServiceRequestForm />
+          <ServiceRequestForm initialComplaint={initialComplaint} />
         </div>
       </section>
     </PublicShell>

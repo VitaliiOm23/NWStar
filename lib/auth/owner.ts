@@ -11,16 +11,17 @@ export async function requireOwner() {
     redirect("/login");
   }
 
-  const ownerEmail = process.env.OWNER_EMAIL?.trim().toLowerCase();
-  const userEmail = user.email?.trim().toLowerCase();
+  const { data: isOwner, error } = await supabase.rpc("is_owner");
 
-  if (!ownerEmail) {
-    throw new Error("OWNER_EMAIL is not configured.");
+  if (error) {
+    console.error("owner authorization check failed", error.message);
+    await supabase.auth.signOut();
+    redirect("/login?error=Owner%20access%20is%20not%20configured%20in%20the%20database.");
   }
 
-  if (!userEmail || userEmail !== ownerEmail) {
+  if (!isOwner) {
     await supabase.auth.signOut();
-    redirect("/login?error=This%20account%20is%20not%20authorized.");
+    redirect("/login?error=This%20account%20is%20not%20authorized%20for%20owner%20access.");
   }
 
   return { supabase, user };

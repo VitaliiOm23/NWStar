@@ -4,7 +4,11 @@ import { FormEvent, useState } from "react";
 
 type FormState = "idle" | "submitting" | "success" | "error";
 
-export function ServiceRequestForm() {
+type ServiceRequestFormProps = {
+  initialComplaint?: string;
+};
+
+export function ServiceRequestForm({ initialComplaint = "" }: ServiceRequestFormProps) {
   const [state, setState] = useState<FormState>("idle");
   const [message, setMessage] = useState("");
   const [reference, setReference] = useState("");
@@ -53,7 +57,7 @@ export function ServiceRequestForm() {
       <div className="form-heading">
         <span>Service request</span>
         <h2>Vehicle and complaint details</h2>
-        <p>Required fields are marked with an asterisk.</p>
+        <p>{initialComplaint ? "The concern you selected is already filled in below. Add any details that will help describe the problem." : "Required fields are marked with an asterisk."}</p>
       </div>
 
       <fieldset className="form-section">
@@ -82,7 +86,7 @@ export function ServiceRequestForm() {
         <div className="form-grid">
           <div className="field"><label htmlFor="urgency">Vehicle status</label><select id="urgency" name="urgency" defaultValue="normal"><option value="normal">Driveable / normal priority</option><option value="vehicle-down">Vehicle is down</option><option value="fleet-priority">Fleet priority</option></select></div>
           <div className="field"><label htmlFor="preferredTime">Preferred timing</label><input id="preferredTime" name="preferredTime" maxLength={120} placeholder="Weekday evening, Saturday, etc." /></div>
-          <div className="field full"><label htmlFor="complaint">What is the vehicle doing? *</label><textarea id="complaint" name="complaint" required minLength={10} maxLength={4000} placeholder="Describe the warning message, symptom, sound or drivability problem. Include when it happens and whether the vehicle still starts and drives." /></div>
+          <div className="field full"><label htmlFor="complaint">What is the vehicle doing? *</label><textarea id="complaint" name="complaint" required minLength={10} maxLength={4000} defaultValue={initialComplaint} placeholder="Describe the warning message, symptom, sound or drivability problem. Include when it happens and whether the vehicle still starts and drives." /></div>
         </div>
       </fieldset>
 

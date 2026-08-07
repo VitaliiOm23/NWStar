@@ -10,13 +10,13 @@ const services = [
 ] as const;
 
 const commonRequests = [
-  "No-start and intermittent starting concerns",
-  "Check-engine, ABS, SRS and warning messages",
-  "SCR, DEF and AdBlue system faults",
-  "CAN, LIN and control-unit communication issues",
-  "Parasitic draw, power and ground testing",
-  "Pre-repair diagnosis and post-repair verification",
-];
+  { label: "No-start and intermittent starting concerns", concern: "No-start or intermittent starting concern" },
+  { label: "Check-engine, ABS, SRS and warning messages", concern: "Warning light or dashboard message concern" },
+  { label: "SCR, DEF and AdBlue system faults", concern: "SCR, DEF or AdBlue system concern" },
+  { label: "CAN, LIN and control-unit communication issues", concern: "CAN, LIN or control-unit communication concern" },
+  { label: "Parasitic draw, power and ground testing", concern: "Battery drain, power or ground concern" },
+  { label: "Pre-repair diagnosis and post-repair verification", concern: "Pre-repair diagnosis or post-repair verification request" },
+] as const;
 
 export default function HomePage() {
   return (
@@ -88,10 +88,17 @@ export default function HomePage() {
           <div>
             <div className="eyebrow">Typical requests</div>
             <h2>Problems we are commonly asked to evaluate.</h2>
-            <p className="section-copy">The exact scope is confirmed after reviewing the vehicle, symptoms, access and location.</p>
+            <p className="section-copy">Select the closest concern. The service request opens with that problem already filled in, and you can edit or add details before sending it.</p>
           </div>
-          <ul className="plain-service-list">
-            {commonRequests.map((item) => <li key={item}>{item}</li>)}
+          <ul className="plain-service-list concern-links">
+            {commonRequests.map(({ label, concern }) => (
+              <li key={label}>
+                <Link href={`/request-service?concern=${encodeURIComponent(concern)}`}>
+                  <span>{label}</span>
+                  <strong>Start request →</strong>
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
       </section>
