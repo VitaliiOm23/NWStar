@@ -1,7 +1,12 @@
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { isPortalToken, loadCustomerPortal } from "@/lib/customer-portal";
 
 export const runtime = "nodejs";
+
+function checkoutIdempotencyKey(invoiceId: string, balanceCents: number) {
+  return `nwstar-checkout-${createHash("sha256").update(`${invoiceId}:${balanceCents}`).digest("hex").slice(0, 32)}`;
+}
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
@@ -18,12 +23,13 @@ export async function POST(request: NextRequest) {
   const balanceCents = Math.round(Number(invoice.balance_due || 0) * 100);
   if (balanceCents <= 0) return NextResponse.redirect(new URL(`/pay/${token}`, request.url), 303);
 
-  const origin = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
+  const origin = (process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\/$/, "");
   const body = new URLSearchParams();
   body.set("mode", "payment");
   body.set("success_url", `${origin}/pay/${token}?paid=1&session_id={CHECKOUT_SESSION_ID}`);
   body.set("cancel_url", `${origin}/pay/${token}?cancelled=1`);
   body.set("client_reference_id", invoice.id);
+  body.set("integration_identifier", "nwstar_qhtrmpsk");
   body.set("line_items[0][price_data][currency]", "usd");
   body.set("line_items[0][price_data][unit_amount]", String(balanceCents));
   body.set("line_items[0][price_data][product_data][name]", `NW Star Diagnostics · ${invoice.invoice_number}`);
@@ -32,6 +38,8 @@ export async function POST(request: NextRequest) {
   body.set("metadata[invoice_id]", invoice.id);
   body.set("metadata[repair_order_id]", ro.id);
   body.set("metadata[portal_token]", token);
+  body.set("metadata[invoice_number]", invoice.invoice_number);
+  body.set("metadata[ro_number]", ro.ro_number);
   if (customer.email) body.set("customer_email", customer.email);
 
   const stripeResponse = await fetch("https://api.stripe.com/v1/checkout/sessions", {
@@ -39,6 +47,8 @@ export async function POST(request: NextRequest) {
     headers: {
       Authorization: `Bearer ${stripeSecret}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      "Stripe-Version": "2026-06-24.dahlia",
+      "Idempotency-Key": checkoutIdempotencyKey(invoice.id, balanceCents),
     },
     body,
     cache: "no-store",
