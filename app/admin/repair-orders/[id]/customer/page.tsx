@@ -94,7 +94,7 @@ export default async function CustomerWorkspacePage({ params }: { params: Promis
   const customer = ro.customers;
   const vehicle = ro.vehicles;
   const vehicleName = vehicle ? `${vehicle.year || ""} ${vehicle.make} ${vehicle.model}`.trim() : "Vehicle";
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://nwstardiagnostics.com").replace(/\/$/, "");
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://nw-star.vercel.app").replace(/\/$/, "");
   const customerUrl = activeLink ? `${siteUrl}/customer/${activeLink.token}` : "";
   const paymentUrl = activeLink ? `${siteUrl}/pay/${activeLink.token}` : "";
   const message = activeLink

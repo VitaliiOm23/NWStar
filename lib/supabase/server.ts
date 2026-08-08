@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getSupabasePublicConfig } from "@/lib/supabase/config";
 
 type CookieToSet = {
   name: string;
@@ -7,26 +8,17 @@ type CookieToSet = {
   options: CookieOptions;
 };
 
-function getSupabaseConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export async function createSupabaseServerClient() {
+  const cookieStore = await cookies();
+  const config = getSupabasePublicConfig();
 
-  if (!url || !key) {
+  if (!config) {
     throw new Error(
-      "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
+      "Supabase is not configured. Add a valid NEXT_PUBLIC_SUPABASE_URL/project ref and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
     );
   }
 
-  return { url, key };
-}
-
-export async function createSupabaseServerClient() {
-  const cookieStore = await cookies();
-  const { url, key } = getSupabaseConfig();
-
-  return createServerClient(url, key, {
+  return createServerClient(config.url, config.key, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
