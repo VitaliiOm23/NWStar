@@ -79,7 +79,7 @@ export default async function RepairOrdersPage() {
           <div>
             <div className="eyebrow">Owner operations</div>
             <h1>Repair orders</h1>
-            <p className="section-copy">Customer concerns, job lines, authorizations, estimates, invoices, and payments.</p>
+            <p className="section-copy">Customer concerns, recommendation lines, authorizations, parts/labor, invoices, payments, and customer links.</p>
           </div>
           <div className="admin-account">
             <span>{user.email}</span>
@@ -115,12 +115,13 @@ export default async function RepairOrdersPage() {
         ) : null}
 
         <section className="ro-table-wrap" aria-label="Repair orders">
-          <div className="ro-table ro-table-head">
+          <div className="ro-table ro-table-head ro-table-with-actions">
             <span>RO / Vehicle</span>
             <span>Customer</span>
             <span>Status</span>
             <span>Invoice</span>
             <span>Balance</span>
+            <span>Actions</span>
           </div>
           {repairOrders.map((ro) => {
             const customer = ro.customers;
@@ -131,7 +132,7 @@ export default async function RepairOrdersPage() {
               : "Vehicle unavailable";
 
             return (
-              <Link className="ro-table ro-table-row" href={`/admin/repair-orders/${ro.id}`} key={ro.id}>
+              <div className="ro-table ro-table-row ro-table-with-actions" key={ro.id}>
                 <span>
                   <strong>{ro.ro_number}</strong>
                   <small>{vehicleName}</small>
@@ -144,7 +145,11 @@ export default async function RepairOrdersPage() {
                 <span><b className={`status-pill status-${ro.status}`}>{titleCase(ro.status)}</b></span>
                 <span>{invoice ? titleCase(invoice.status) : "Not created"}</span>
                 <span><strong>{invoice ? money(invoice.balance_due) : "—"}</strong></span>
-              </Link>
+                <span className="ro-row-actions">
+                  <Link className="button secondary" href={`/admin/repair-orders/${ro.id}`}>Open RO</Link>
+                  <Link className="button" href={`/admin/repair-orders/${ro.id}/customer`}>Customer</Link>
+                </span>
+              </div>
             );
           })}
         </section>
