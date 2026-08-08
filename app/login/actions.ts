@@ -22,23 +22,32 @@ export async function signIn(formData: FormData) {
   }
 
   for (const key of keys) {
+    let authSucceeded = false;
     let errorMessage: string | null = null;
+    let invalidApiKey = false;
 
     try {
       const supabase = await createSupabaseServerClient(key);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (!error) {
-        redirect("/admin");
+        authSucceeded = true;
+      } else if (isInvalidApiKeyError(error)) {
+        invalidApiKey = true;
+      } else {
+        errorMessage = error.message || "Unknown Supabase authentication error";
       }
-
-      if (isInvalidApiKeyError(error)) {
-        continue;
-      }
-
-      errorMessage = error.message || "Unknown Supabase authentication error";
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : "Unknown server configuration error";
+    }
+
+    // Next.js redirect() throws internally, so it must stay outside the try/catch above.
+    if (authSucceeded) {
+      redirect("/admin");
+    }
+
+    if (invalidApiKey) {
+      continue;
     }
 
     if (errorMessage) {
@@ -57,6 +66,6 @@ export async function signIn(formData: FormData) {
   }
 
   redirect(
-    "/login?error=Supabase%20rejected%20every%20public%20API%20key%20available%20to%20this%20deployment.%20The%20Vercel%20key%20must%20come%20from%20this%20Supabase%20project."
+    "/login?error=Supabase%20rejected%20every%20public%20API%20key%20available%20to%20this%20deployment."
   );
 }
