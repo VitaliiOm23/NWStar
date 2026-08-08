@@ -19,15 +19,21 @@ export async function createCustomerPortalLink(formData: FormData) {
   const { supabase, user } = await requireOwner();
   const { data: existing } = await supabase
     .from("customer_portal_links")
-    .select("id")
+    .select("id,expires_at")
     .eq("repair_order_id", repairOrderId)
     .eq("active", true)
-    .or("expires_at.is.null,expires_at.gt.now()")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (!existing) {
+  const existingIsUsable = Boolean(
+    existing && (!existing.expires_at || new Date(existing.expires_at).getTime() > Date.now())
+  );
+
+  if (!existingIsUsable) {
+    if (existing?.id) {
+      await supabase.from("customer_portal_links").update({ active: false }).eq("id", existing.id);
+    }
     const { error } = await supabase.from("customer_portal_links").insert({
       repair_order_id: repairOrderId,
       created_by: user.id,
