@@ -6,9 +6,17 @@ type FormState = "idle" | "submitting" | "success" | "error";
 
 type ServiceRequestFormProps = {
   initialComplaint?: string;
+  submitLabel?: string;
+  successTitle?: string;
+  successMessage?: string;
 };
 
-export function ServiceRequestForm({ initialComplaint = "" }: ServiceRequestFormProps) {
+export function ServiceRequestForm({
+  initialComplaint = "",
+  submitLabel = "Send Service Request",
+  successTitle = "Your vehicle information was submitted.",
+  successMessage = "We will review the complaint and contact you about scope, location and scheduling.",
+}: ServiceRequestFormProps) {
   const [state, setState] = useState<FormState>("idle");
   const [message, setMessage] = useState("");
   const [reference, setReference] = useState("");
@@ -44,8 +52,8 @@ export function ServiceRequestForm({ initialComplaint = "" }: ServiceRequestForm
     return (
       <div className="form success-panel" role="status">
         <div className="eyebrow">Request received</div>
-        <h2>Your vehicle information was submitted.</h2>
-        <p>We will review the complaint and contact you about scope, location and scheduling.</p>
+        <h2>{successTitle}</h2>
+        <p>{successMessage}</p>
         <div className="reference-box"><span>Reference number</span><strong>{reference}</strong></div>
         <button className="button secondary" type="button" onClick={() => setState("idle")}>Submit another vehicle</button>
       </div>
@@ -107,7 +115,7 @@ export function ServiceRequestForm({ initialComplaint = "" }: ServiceRequestForm
       </div>
 
       <div className="form-submit-row">
-        <button className="button" type="submit" disabled={state === "submitting"}>{state === "submitting" ? "Sending request…" : "Send Service Request"}</button>
+        <button className="button" type="submit" disabled={state === "submitting"}>{state === "submitting" ? "Sending request…" : submitLabel}</button>
         <p className="notice">Do not enter payment-card numbers, Social Security numbers or passwords.</p>
       </div>
 
