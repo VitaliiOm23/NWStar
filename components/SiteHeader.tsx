@@ -27,12 +27,12 @@ export function SiteHeader() {
           <nav className="nav-links" aria-label="Primary navigation">
             {links.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
           </nav>
-          <Link className="nav-cta" href="/request-service">Request Service</Link>
+          <Link className="nav-cta" href="/book">Schedule Service</Link>
         </div>
       </header>
       <div className="mobile-actions" aria-label="Quick actions">
         <Link href="/services">Services</Link>
-        <Link className="primary" href="/request-service">Request Service</Link>
+        <Link className="primary" href="/book">Schedule Service</Link>
       </div>
     </>
   );
