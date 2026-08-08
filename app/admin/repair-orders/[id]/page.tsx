@@ -12,6 +12,7 @@ import {
   syncInvoice,
   updateEstimate,
   updateInvoicePaymentLink,
+  updateLaborRate,
   updateRepairOrder,
   updateRepairOrderJob,
 } from "../actions";
@@ -37,6 +38,7 @@ type RepairOrder = {
   promised_at: string | null;
   completed_at: string | null;
   tax_rate: number;
+  labor_rate: number;
   shop_supplies_amount: number;
   shop_supplies_taxable: boolean;
   discount_amount: number;
@@ -223,7 +225,7 @@ export default async function RepairOrderDetailPage({
     supabase
       .from("repair_orders")
       .select(
-        "id,ro_number,service_request_id,status,original_complaint,customer_instructions,estimate_choice,authorized_limit,estimate_authorization_note,parts_return_requested,odometer_in,odometer_out,promised_at,completed_at,tax_rate,shop_supplies_amount,shop_supplies_taxable,discount_amount,internal_notes,opened_at,updated_at,customers(id,full_name,phone,email,company_name),vehicles(id,year,make,model,vin,mileage,license_plate,unit_number)"
+        "id,ro_number,service_request_id,status,original_complaint,customer_instructions,estimate_choice,authorized_limit,estimate_authorization_note,parts_return_requested,odometer_in,odometer_out,promised_at,completed_at,tax_rate,labor_rate,shop_supplies_amount,shop_supplies_taxable,discount_amount,internal_notes,opened_at,updated_at,customers(id,full_name,phone,email,company_name),vehicles(id,year,make,model,vin,mileage,license_plate,unit_number)"
       )
       .eq("id", id)
       .maybeSingle(),
@@ -305,9 +307,7 @@ export default async function RepairOrderDetailPage({
           <div>
             <div className="eyebrow">{ro.ro_number}</div>
             <h1>{vehicleName}</h1>
-            <p className="section-copy">
-              {customer?.full_name || "Unknown customer"} · {titleCase(ro.status)}
-            </p>
+            <p className="section-copy">{customer?.full_name || "Unknown customer"} · {titleCase(ro.status)}</p>
           </div>
           <div className="admin-account">
             <span>{user.email}</span>
@@ -326,7 +326,7 @@ export default async function RepairOrderDetailPage({
           <span className={`status-pill status-${ro.status}`}>{titleCase(ro.status)}</span>
         </section>
 
-        <section className="ro-overview-grid">
+        <section className="ro-overview-grid ro-overview-compact">
           <article className="admin-panel">
             <div className="panel-label">Customer</div>
             <h2>{customer?.full_name || "Unknown customer"}</h2>
@@ -338,24 +338,33 @@ export default async function RepairOrderDetailPage({
             <div className="panel-label">Vehicle</div>
             <h2>{vehicleName}</h2>
             <p>VIN: {vehicle?.vin || "—"}</p>
-            <p>Plate: {vehicle?.license_plate || "—"}</p>
-            <p>Unit: {vehicle?.unit_number || "—"}</p>
+            <p>Plate: {vehicle?.license_plate || "—"} · Unit: {vehicle?.unit_number || "—"}</p>
+            <p>Mileage: {vehicle?.mileage?.toLocaleString() || "—"}</p>
           </article>
-          <article className="admin-panel financial-panel">
-            <div className="panel-label">Current approved total</div>
+          <article className="admin-panel financial-panel ro-money-summary">
+            <div className="panel-label">RO money</div>
             <h2>{money(approvedTotal)}</h2>
-            <p>Estimate before tax: {money(estimateBeforeTax)}</p>
-            <p>Invoice balance: {invoice ? money(invoice.balance_due) : "Not invoiced"}</p>
+            <p>Estimate: {money(estimateBeforeTax)} · Balance: {invoice ? money(invoice.balance_due) : "Not invoiced"}</p>
+            <form action={updateLaborRate} className="labor-rate-form">
+              <input type="hidden" name="repairOrderId" value={ro.id} />
+              <label htmlFor="laborRate">Labor rate</label>
+              <div className="labor-rate-control">
+                <span>$</span>
+                <input id="laborRate" name="laborRate" type="number" min="0" step="0.01" defaultValue={Number(ro.labor_rate || 100).toFixed(2)} required />
+                <span>/hr</span>
+                <button className="button secondary" type="submit">Set</button>
+              </div>
+            </form>
           </article>
         </section>
 
-        <section className="admin-panel complaint-panel">
+        <section className="admin-panel complaint-panel compact-complaint-panel">
           <div className="panel-label">Original customer complaint</div>
           <p>{ro.original_complaint}</p>
         </section>
 
-        <details className="admin-disclosure" open>
-          <summary>Repair order details and legal authorization record</summary>
+        <details className="admin-disclosure ro-details-dropdown">
+          <summary>RO details, status, odometer, tax and legal authorization</summary>
           <form action={updateRepairOrder} className="admin-form-grid">
             <input type="hidden" name="repairOrderId" value={ro.id} />
             <div className="field"><label htmlFor="status">RO status</label><select id="status" name="status" defaultValue={ro.status}>{roStatuses.map((status) => <option value={status} key={status}>{titleCase(status)}</option>)}</select></div>
@@ -370,7 +379,7 @@ export default async function RepairOrderDetailPage({
             <div className="field"><label htmlFor="discountAmount">RO discount</label><input id="discountAmount" name="discountAmount" type="number" min="0" step="0.01" defaultValue={ro.discount_amount || 0} /></div>
             <div className="field full"><label htmlFor="originalComplaint">Original complaint</label><textarea id="originalComplaint" name="originalComplaint" defaultValue={ro.original_complaint} required /></div>
             <div className="field full"><label htmlFor="customerInstructions">Customer instructions / requested work</label><textarea id="customerInstructions" name="customerInstructions" defaultValue={ro.customer_instructions || ""} /></div>
-            <div className="field full"><label htmlFor="estimateAuthorizationNote">Estimate or authorization note</label><textarea id="estimateAuthorizationNote" name="estimateAuthorizationNote" defaultValue={ro.estimate_authorization_note || ""} placeholder="Date, time, authorization method, customer name, and authorized amount when applicable." /></div>
+            <div className="field full"><label htmlFor="estimateAuthorizationNote">Estimate or authorization note</label><textarea id="estimateAuthorizationNote" name="estimateAuthorizationNote" defaultValue={ro.estimate_authorization_note || ""} /></div>
             <div className="field full"><label htmlFor="internalNotes">Internal notes</label><textarea id="internalNotes" name="internalNotes" defaultValue={ro.internal_notes || ""} /></div>
             <label className="checkbox-label"><input type="checkbox" name="partsReturnRequested" value="yes" defaultChecked={ro.parts_return_requested} /> Customer requested replaced parts returned or shown</label>
             <label className="checkbox-label"><input type="checkbox" name="shopSuppliesTaxable" value="yes" defaultChecked={ro.shop_supplies_taxable} /> Shop supplies are taxable</label>
@@ -378,92 +387,152 @@ export default async function RepairOrderDetailPage({
           </form>
         </details>
 
-        <section className="ro-section-heading">
-          <div><div className="eyebrow">Jobs and recommendations</div><h2>Repair-order lines</h2></div>
-          <span>{jobs.length} job{jobs.length === 1 ? "" : "s"}</span>
+        <section className="ro-section-heading ro-line-heading">
+          <div><div className="eyebrow">Jobs and recommendations</div><h2>RO lines</h2></div>
+          <span>{jobs.length} line{jobs.length === 1 ? "" : "s"}</span>
         </section>
 
-        <section className="ro-jobs">
-          {jobs.map((job) => {
-            const jobItems = itemsByJob.get(job.id) || [];
-            const totals = jobTotals.get(job.id) || { subtotal: 0, taxable: 0 };
-            return (
-              <article className="ro-job-card" key={job.id}>
-                <header className="ro-job-head">
-                  <div>
-                    <span className="ro-line-number">Line {job.line_number}</span>
-                    <h2>{job.title}</h2>
-                  </div>
-                  <div className="ro-job-total">
-                    <span className={`status-pill status-${job.authorization_status}`}>{titleCase(job.authorization_status)}</span>
-                    <strong>{money(totals.subtotal)}</strong>
-                  </div>
-                </header>
+        <section className="ro-line-workspace">
+          <aside className="admin-panel ro-line-sidebar">
+            <details className="ro-line-menu" open>
+              <summary>Repair-order lines</summary>
+              <nav className="ro-line-nav">
+                {jobs.map((job) => {
+                  const total = jobTotals.get(job.id)?.subtotal || 0;
+                  return (
+                    <a href={`#line-${job.id}`} key={job.id}>
+                      <span><b>Line {job.line_number}</b><small>{job.title}</small></span>
+                      <span><small>{titleCase(job.authorization_status)}</small><strong>{money(total)}</strong></span>
+                    </a>
+                  );
+                })}
+                {jobs.length === 0 ? <p className="admin-muted">No lines yet.</p> : null}
+              </nav>
+            </details>
 
-                <form action={updateRepairOrderJob} className="admin-form-grid ro-job-form">
-                  <input type="hidden" name="repairOrderId" value={ro.id} />
-                  <input type="hidden" name="jobId" value={job.id} />
-                  <div className="field"><label>Job title</label><input name="title" defaultValue={job.title} required /></div>
-                  <div className="field"><label>Customer decision</label><select name="authorizationStatus" defaultValue={job.authorization_status}>{jobStatuses.map((status) => <option value={status} key={status}>{titleCase(status)}</option>)}</select></div>
-                  <div className="field full"><label>Customer concern / requested job</label><textarea name="customerConcern" defaultValue={job.customer_concern} required /></div>
-                  <div className="field full"><label>Technician findings / cause</label><textarea name="technicianFindings" defaultValue={job.technician_findings || ""} /></div>
-                  <div className="field full"><label>Recommended work</label><textarea name="recommendedAction" defaultValue={job.recommended_action || ""} /></div>
-                  <div className="field full"><label>Correction performed</label><textarea name="correctionPerformed" defaultValue={job.correction_performed || ""} /></div>
-                  <div className="field"><label>Authorized amount</label><input name="authorizedAmount" type="number" min="0" step="0.01" defaultValue={job.authorized_amount ?? totals.subtotal.toFixed(2)} /></div>
-                  <div className="field"><label>Authorization method</label><select name="authorizationMethod" defaultValue={job.authorization_method || ""}><option value="">Not recorded</option><option value="written">Written</option><option value="phone">Phone</option><option value="text">Text message</option><option value="email">Email</option><option value="in_person">In person</option><option value="online">Online</option></select></div>
-                  <div className="field"><label>Authorized by</label><input name="authorizedByName" defaultValue={job.authorized_by_name || ""} placeholder="Customer or designee name" /></div>
-                  <div className="field"><label>Authorizer phone</label><input name="authorizedByPhone" type="tel" defaultValue={job.authorized_by_phone || customer?.phone || ""} /></div>
-                  <div className="field full"><label>Deferred / declined reason</label><textarea name="deferredReason" defaultValue={job.deferred_reason || ""} /></div>
-                  <div className="field full"><label>Authorization note</label><textarea name="authorizationNote" placeholder="Any limit, added work, date/time context, or exact wording from the customer." /></div>
-                  <div className="field full"><button className="button secondary" type="submit">Save job line</button></div>
-                </form>
+            <details className="inline-disclosure ro-add-line-menu" open={jobs.length === 0}>
+              <summary>+ Add RO line</summary>
+              <form action={addRepairOrderJob} className="admin-form-grid sidebar-add-line-form">
+                <input type="hidden" name="repairOrderId" value={ro.id} />
+                <div className="field full"><label>Job title</label><input name="title" placeholder="Diagnose no-crank condition" required /></div>
+                <div className="field full"><label>Customer concern / requested job</label><textarea name="customerConcern" required /></div>
+                <div className="field full"><label>Initial findings</label><textarea name="technicianFindings" /></div>
+                <div className="field full"><label>Recommendation</label><textarea name="recommendedAction" /></div>
+                <div className="field full"><button className="button" type="submit">Add line</button></div>
+              </form>
+            </details>
+          </aside>
 
-                <div className="ro-items-table">
-                  <div className="ro-items-head"><span>Type / Description</span><span>Qty</span><span>Unit</span><span>Total</span><span /></div>
-                  {jobItems.length === 0 ? <p className="empty-line-items">No labor, parts, or fees added.</p> : null}
-                  {jobItems.map((item) => (
-                    <div className="ro-item-row" key={item.id}>
-                      <span><strong>{titleCase(item.item_type)}</strong><small>{item.description}{item.part_number ? ` · ${item.part_number}` : ""}{item.part_condition ? ` · ${titleCase(item.part_condition)}` : ""}{item.taxable ? " · Taxable" : ""}</small></span>
-                      <span>{Number(item.quantity).toFixed(item.item_type === "labor" ? 2 : 0)}</span>
-                      <span>{money(item.unit_price)}</span>
-                      <span><strong>{money(extended(item))}</strong></span>
-                      <form action={removeJobItem}><input type="hidden" name="repairOrderId" value={ro.id} /><input type="hidden" name="itemId" value={item.id} /><button className="text-button danger" type="submit">Remove</button></form>
+          <section className="ro-job-panels">
+            {jobs.map((job) => {
+              const jobItems = itemsByJob.get(job.id) || [];
+              const totals = jobTotals.get(job.id) || { subtotal: 0, taxable: 0 };
+              return (
+                <article className="ro-job-card ro-job-panel" id={`line-${job.id}`} key={job.id}>
+                  <header className="ro-job-head ro-selected-line-head">
+                    <div>
+                      <span className="ro-line-number">Line {job.line_number}</span>
+                      <h2>{job.title}</h2>
                     </div>
-                  ))}
-                </div>
+                    <div className="ro-job-total">
+                      <span className={`status-pill status-${job.authorization_status}`}>{titleCase(job.authorization_status)}</span>
+                      <strong>{money(totals.subtotal)}</strong>
+                    </div>
+                  </header>
 
-                <details className="inline-disclosure">
-                  <summary>Add labor, part, fee, sublet, or discount</summary>
-                  <form action={addJobItem} className="admin-form-grid item-entry-form">
+                  <form action={updateRepairOrderJob} className="ro-line-edit-form">
                     <input type="hidden" name="repairOrderId" value={ro.id} />
                     <input type="hidden" name="jobId" value={job.id} />
-                    <div className="field"><label>Item type</label><select name="itemType" defaultValue="labor"><option value="labor">Labor</option><option value="part">Part</option><option value="fee">Fee / shop supply</option><option value="sublet">Sublet</option><option value="discount">Line discount</option></select></div>
-                    <div className="field"><label>Description</label><input name="description" required /></div>
-                    <div className="field"><label>Part number</label><input name="partNumber" /></div>
-                    <div className="field"><label>Part condition</label><select name="partCondition" defaultValue=""><option value="">Not applicable</option><option value="new_oem">New OEM</option><option value="new_aftermarket">New aftermarket</option><option value="rebuilt">Rebuilt</option><option value="used">Used</option><option value="customer_supplied">Customer supplied</option></select></div>
-                    <div className="field"><label>Quantity / hours</label><input name="quantity" type="number" min="0.001" step="0.001" defaultValue="1" required /></div>
-                    <div className="field"><label>Unit price / labor rate</label><input name="unitPrice" type="number" min="0" step="0.01" required /></div>
-                    <div className="field"><label>Internal unit cost</label><input name="unitCost" type="number" min="0" step="0.01" /></div>
-                    <label className="checkbox-label"><input type="checkbox" name="taxable" value="yes" defaultChecked /> Taxable</label>
-                    <div className="field full"><button className="button secondary" type="submit">Add line item</button></div>
-                  </form>
-                </details>
-              </article>
-            );
-          })}
-        </section>
 
-        <details className="admin-disclosure add-job-disclosure" open={jobs.length === 0}>
-          <summary>Add another RO job line</summary>
-          <form action={addRepairOrderJob} className="admin-form-grid">
-            <input type="hidden" name="repairOrderId" value={ro.id} />
-            <div className="field"><label>Job title</label><input name="title" placeholder="Example: Diagnose no-crank condition" required /></div>
-            <div className="field full"><label>Customer concern / requested job</label><textarea name="customerConcern" required /></div>
-            <div className="field full"><label>Initial findings</label><textarea name="technicianFindings" /></div>
-            <div className="field full"><label>Recommendation</label><textarea name="recommendedAction" /></div>
-            <div className="field full"><button className="button" type="submit">Add job line</button></div>
-          </form>
-        </details>
+                    <details className="line-section" open>
+                      <summary><span>Concern, diagnosis and correction</span><small>What came in, what you found, what you recommend, what you did</small></summary>
+                      <div className="admin-form-grid ro-job-form">
+                        <div className="field"><label>Job title</label><input name="title" defaultValue={job.title} required /></div>
+                        <div className="field"><label>Customer decision</label><select name="authorizationStatus" defaultValue={job.authorization_status}>{jobStatuses.map((status) => <option value={status} key={status}>{titleCase(status)}</option>)}</select></div>
+                        <div className="field full"><label>Customer concern / requested job</label><textarea name="customerConcern" defaultValue={job.customer_concern} required /></div>
+                        <div className="field full"><label>Technician findings / cause</label><textarea name="technicianFindings" defaultValue={job.technician_findings || ""} /></div>
+                        <div className="field full"><label>Recommended work</label><textarea name="recommendedAction" defaultValue={job.recommended_action || ""} /></div>
+                        <div className="field full"><label>Correction performed</label><textarea name="correctionPerformed" defaultValue={job.correction_performed || ""} /></div>
+                      </div>
+                    </details>
+
+                    <details className="line-section">
+                      <summary><span>Authorization</span><small>{titleCase(job.authorization_status)}{job.authorized_amount !== null ? ` · ${money(job.authorized_amount)}` : ""}</small></summary>
+                      <div className="admin-form-grid">
+                        <div className="field"><label>Authorized amount</label><input name="authorizedAmount" type="number" min="0" step="0.01" defaultValue={job.authorized_amount ?? totals.subtotal.toFixed(2)} /></div>
+                        <div className="field"><label>Authorization method</label><select name="authorizationMethod" defaultValue={job.authorization_method || ""}><option value="">Not recorded</option><option value="written">Written</option><option value="phone">Phone</option><option value="text">Text message</option><option value="email">Email</option><option value="in_person">In person</option><option value="online">Online</option></select></div>
+                        <div className="field"><label>Authorized by</label><input name="authorizedByName" defaultValue={job.authorized_by_name || ""} placeholder="Customer or designee name" /></div>
+                        <div className="field"><label>Authorizer phone</label><input name="authorizedByPhone" type="tel" defaultValue={job.authorized_by_phone || customer?.phone || ""} /></div>
+                        <div className="field full"><label>Deferred / declined reason</label><textarea name="deferredReason" defaultValue={job.deferred_reason || ""} /></div>
+                        <div className="field full"><label>Authorization note</label><textarea name="authorizationNote" placeholder="Any limit, added work, date/time context, or exact wording from the customer." /></div>
+                      </div>
+                    </details>
+
+                    <div className="line-save-bar"><button className="button" type="submit">Save line</button></div>
+                  </form>
+
+                  <details className="line-section line-items-section" open={jobItems.length > 0}>
+                    <summary><span>Labor, parts, fees and discounts</span><small>{jobItems.length} item{jobItems.length === 1 ? "" : "s"} · {money(totals.subtotal)}</small></summary>
+
+                    <div className="ro-items-table">
+                      <div className="ro-items-head"><span>Type / Description</span><span>Qty / hrs</span><span>Rate / unit</span><span>Total</span><span /></div>
+                      {jobItems.length === 0 ? <p className="empty-line-items">No labor, parts, or fees added.</p> : null}
+                      {jobItems.map((item) => (
+                        <div className="ro-item-row" key={item.id}>
+                          <span><strong>{titleCase(item.item_type)}</strong><small>{item.description}{item.part_number ? ` · ${item.part_number}` : ""}{item.part_condition ? ` · ${titleCase(item.part_condition)}` : ""}{item.taxable ? " · Taxable" : ""}</small></span>
+                          <span>{Number(item.quantity).toFixed(item.item_type === "labor" ? 1 : 2)}</span>
+                          <span>{money(item.unit_price)}</span>
+                          <span><strong>{money(extended(item))}</strong></span>
+                          <form action={removeJobItem}><input type="hidden" name="repairOrderId" value={ro.id} /><input type="hidden" name="itemId" value={item.id} /><button className="text-button danger" type="submit">Remove</button></form>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="line-entry-grid">
+                      <details className="inline-disclosure labor-entry" open>
+                        <summary>Add labor · {money(ro.labor_rate)}/hr</summary>
+                        <form action={addJobItem} className="admin-form-grid compact-item-form">
+                          <input type="hidden" name="repairOrderId" value={ro.id} />
+                          <input type="hidden" name="jobId" value={job.id} />
+                          <input type="hidden" name="itemType" value="labor" />
+                          <div className="field full"><label>Labor description</label><input name="description" placeholder="Diagnostic labor, repair labor, programming…" required /></div>
+                          <div className="field"><label>Hours</label><input name="quantity" type="number" min="0.1" step="0.1" placeholder="1.3" required /></div>
+                          <div className="field labor-calculation-readout"><label>Pricing</label><div>{money(ro.labor_rate)} × hours</div></div>
+                          <label className="checkbox-label"><input type="checkbox" name="taxable" value="yes" defaultChecked /> Taxable</label>
+                          <div className="field full"><button className="button secondary" type="submit">Add labor</button></div>
+                        </form>
+                      </details>
+
+                      <details className="inline-disclosure">
+                        <summary>Add part, fee, sublet, or discount</summary>
+                        <form action={addJobItem} className="admin-form-grid compact-item-form">
+                          <input type="hidden" name="repairOrderId" value={ro.id} />
+                          <input type="hidden" name="jobId" value={job.id} />
+                          <div className="field"><label>Item type</label><select name="itemType" defaultValue="part"><option value="part">Part</option><option value="fee">Fee / shop supply</option><option value="sublet">Sublet</option><option value="discount">Line discount</option></select></div>
+                          <div className="field"><label>Description</label><input name="description" required /></div>
+                          <div className="field"><label>Part number</label><input name="partNumber" /></div>
+                          <div className="field"><label>Part condition</label><select name="partCondition" defaultValue=""><option value="">Not applicable</option><option value="new_oem">New OEM</option><option value="new_aftermarket">New aftermarket</option><option value="rebuilt">Rebuilt</option><option value="used">Used</option><option value="customer_supplied">Customer supplied</option></select></div>
+                          <div className="field"><label>Quantity</label><input name="quantity" type="number" min="0.001" step="0.001" defaultValue="1" required /></div>
+                          <div className="field"><label>Unit price</label><input name="unitPrice" type="number" min="0" step="0.01" required /></div>
+                          <div className="field"><label>Internal unit cost</label><input name="unitCost" type="number" min="0" step="0.01" /></div>
+                          <label className="checkbox-label"><input type="checkbox" name="taxable" value="yes" defaultChecked /> Taxable</label>
+                          <div className="field full"><button className="button secondary" type="submit">Add item</button></div>
+                        </form>
+                      </details>
+                    </div>
+                  </details>
+                </article>
+              );
+            })}
+
+            {jobs.length === 0 ? (
+              <article className="admin-panel ro-empty-workspace">
+                <div className="eyebrow">No RO lines</div>
+                <h2>Add the first line from the menu on the left.</h2>
+              </article>
+            ) : null}
+          </section>
+        </section>
 
         <section className="ro-financial-workspace">
           <div className="financial-column">
@@ -559,19 +628,21 @@ export default async function RepairOrderDetailPage({
           </div>
         </section>
 
-        <section className="admin-panel authorization-history">
-          <div className="ro-section-heading"><div><div className="eyebrow">Audit trail</div><h2>Customer authorizations</h2></div></div>
-          {authorizations.length === 0 ? <p>No line-level authorization decisions have been logged yet.</p> : null}
-          {authorizations.map((authorization) => {
-            const job = jobs.find((item) => item.id === authorization.ro_job_id);
-            return (
-              <div className="authorization-row" key={authorization.id}>
-                <span><strong>{job ? `Line ${job.line_number}: ${job.title}` : "Repair order"}</strong><small>{new Date(authorization.authorized_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} · {authorization.authorization_method} · recorded by {authorization.employee_name || "owner"}</small></span>
-                <span>{titleCase(authorization.decision)}{authorization.authorized_amount !== null ? ` · ${money(authorization.authorized_amount)}` : ""}<small>{authorization.authorized_by_name}{authorization.authorized_by_phone ? ` · ${authorization.authorized_by_phone}` : ""}</small></span>
-              </div>
-            );
-          })}
-        </section>
+        <details className="admin-disclosure authorization-history">
+          <summary>Customer authorization audit trail · {authorizations.length}</summary>
+          <div className="authorization-history-body">
+            {authorizations.length === 0 ? <p>No line-level authorization decisions have been logged yet.</p> : null}
+            {authorizations.map((authorization) => {
+              const job = jobs.find((item) => item.id === authorization.ro_job_id);
+              return (
+                <div className="authorization-row" key={authorization.id}>
+                  <span><strong>{job ? `Line ${job.line_number}: ${job.title}` : "Repair order"}</strong><small>{new Date(authorization.authorized_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} · {authorization.authorization_method} · recorded by {authorization.employee_name || "owner"}</small></span>
+                  <span>{titleCase(authorization.decision)}{authorization.authorized_amount !== null ? ` · ${money(authorization.authorized_amount)}` : ""}<small>{authorization.authorized_by_name}{authorization.authorized_by_phone ? ` · ${authorization.authorized_by_phone}` : ""}</small></span>
+                </div>
+              );
+            })}
+          </div>
+        </details>
       </div>
     </main>
   );
