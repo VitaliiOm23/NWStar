@@ -1,46 +1,8 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-type CookieToSet = {
-  name: string;
-  value: string;
-  options: CookieOptions;
-};
-
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
-
-  const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!projectUrl || !publishableKey) {
-    return response;
-  }
-
-  try {
-    const supabase = createServerClient(projectUrl, publishableKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
-        },
-      },
-    });
-
-    await supabase.auth.getUser();
-  } catch (error) {
-    console.error("Supabase middleware auth refresh failed", error);
-  }
-
-  return response;
+// Keep routing middleware intentionally passive while owner authentication is verified.
+export function middleware(request: NextRequest) {
+  return NextResponse.next({ request });
 }
 
 export const config = {

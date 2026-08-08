@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CtaBand, PublicShell } from "../../components/PublicShell";
 
 const services = [
@@ -10,7 +11,7 @@ const services = [
   ["Pre-purchase diagnostics", "Electronic system scan and findings review before a customer or fleet acquires a vehicle."],
   ["Fleet triage", "Priority fault isolation, documented next steps and coordination with the fleet or repair facility."],
   ["Second-opinion diagnosis", "Independent review when previous repairs or parts replacement did not resolve the complaint."],
-];
+] as const;
 
 export default function ServicesPage() {
   return (
@@ -22,11 +23,17 @@ export default function ServicesPage() {
       <section className="section">
         <div className="shell grid-3">
           {services.map(([title, text], index) => (
-            <article className="card" key={title}>
+            <Link
+              className="card"
+              href={`/request-service?concern=${encodeURIComponent(title)}`}
+              key={title}
+              aria-label={`Start a service request for ${title}`}
+            >
               <div className="card-number">{String(index + 1).padStart(2, "0")}</div>
               <h3>{title}</h3>
               <p>{text}</p>
-            </article>
+              <span className="card-link">Start request →</span>
+            </Link>
           ))}
         </div>
       </section>

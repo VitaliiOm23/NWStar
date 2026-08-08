@@ -1,11 +1,24 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getWorkingSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function requireOwner() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let session:
+    | Awaited<ReturnType<typeof getWorkingSupabaseServerClient>>
+    | null = null;
+
+  try {
+    session = await getWorkingSupabaseServerClient();
+  } catch (error) {
+    console.error(
+      "Supabase owner client setup failed",
+      error instanceof Error ? error.message : error
+    );
+    redirect(
+      "/login?error=Supabase%20configuration%20is%20not%20valid%20for%20owner%20access."
+    );
+  }
+
+  const { supabase, user } = session;
 
   if (!user) {
     redirect("/login");
@@ -16,12 +29,16 @@ export async function requireOwner() {
   if (error) {
     console.error("owner authorization check failed", error.message);
     await supabase.auth.signOut();
-    redirect("/login?error=Owner%20access%20is%20not%20configured%20in%20the%20database.");
+    redirect(
+      "/login?error=Owner%20access%20is%20not%20configured%20in%20the%20database."
+    );
   }
 
   if (!isOwner) {
     await supabase.auth.signOut();
-    redirect("/login?error=This%20account%20is%20not%20authorized%20for%20owner%20access.");
+    redirect(
+      "/login?error=This%20account%20is%20not%20authorized%20for%20owner%20access."
+    );
   }
 
   return { supabase, user };
