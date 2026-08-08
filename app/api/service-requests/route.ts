@@ -3,16 +3,41 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabasePublicConfig } from "@/lib/supabase/config";
 
+const optionalInteger = (min: number, max: number) =>
+  z.preprocess((value) => {
+    if (value === undefined || value === null || value === "") return undefined;
+    if (typeof value === "string") {
+      const cleaned = value.trim().replace(/[,\s]/g, "");
+      if (!cleaned) return undefined;
+      if (/^\d+$/.test(cleaned)) return Number(cleaned);
+    }
+    return value;
+  }, z.number().int().min(min).max(max).optional());
+
+const optionalEmail = z.preprocess((value) => {
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  return value;
+}, z.string().trim().email().max(160).optional());
+
+const optionalVin = z.preprocess((value) => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "string") {
+    const cleaned = value.trim().toUpperCase().replace(/\s/g, "");
+    return cleaned || undefined;
+  }
+  return value;
+}, z.string().regex(/^[A-HJ-NPR-Z0-9]{17}$/).optional());
+
 const requestSchema = z.object({
   fullName: z.string().trim().min(2).max(100),
   phone: z.string().trim().min(7).max(30),
-  email: z.union([z.string().trim().email().max(160), z.literal("")]).optional(),
+  email: optionalEmail,
   companyName: z.string().trim().max(120).optional().default(""),
-  year: z.union([z.coerce.number().int().min(1950).max(new Date().getFullYear() + 1), z.literal("")]).optional(),
+  year: optionalInteger(1950, new Date().getFullYear() + 1),
   make: z.string().trim().min(2).max(60),
   model: z.string().trim().min(1).max(80),
-  vin: z.union([z.string().trim().toUpperCase().regex(/^[A-HJ-NPR-Z0-9]{17}$/), z.literal("")]).optional(),
-  mileage: z.union([z.coerce.number().int().min(0).max(3000000), z.literal("")]).optional(),
+  vin: optionalVin,
+  mileage: optionalInteger(0, 3000000),
   unitNumber: z.string().trim().max(40).optional().default(""),
   serviceLocation: z.string().trim().min(2).max(240),
   preferredTime: z.string().trim().max(120).optional().default(""),
@@ -23,6 +48,32 @@ const requestSchema = z.object({
   website: z.string().max(0).optional().default(""),
   consent: z.literal("yes"),
 });
+
+function validationMessage(error: z.ZodError) {
+  const issue = error.issues[0];
+  const field = String(issue?.path?.[0] || "");
+
+  const messages: Record<string, string> = {
+    fullName: "Please enter your name.",
+    phone: "Please enter a valid phone number with at least 7 digits.",
+    email: "Please enter a valid email address or leave it blank.",
+    year: `Please enter a valid 4-digit vehicle year between 1950 and ${new Date().getFullYear() + 1}, or leave it blank.`,
+    make: "Please enter the vehicle make.",
+    model: "Please enter the vehicle model.",
+    vin: "VIN is optional. If entered, it must be a valid 17-character VIN.",
+    mileage: "Please enter mileage as a number (commas are okay), or leave it blank.",
+    serviceLocation: "Please enter the vehicle location.",
+    urgency: "Please select the vehicle status.",
+    complaint: "Please describe the vehicle concern using at least 10 characters.",
+    consent: "Please check the contact authorization box before submitting.",
+    website: "Unable to submit this request.",
+  };
+
+  return {
+    error: messages[field] || "Please check the highlighted information and try again.",
+    field: field || undefined,
+  };
+}
 
 const attempts = new Map<string, number[]>();
 function rateLimited(ip: string) {
@@ -38,11 +89,15 @@ export async function POST(request: NextRequest) {
   if (rateLimited(ip)) return NextResponse.json({ error: "Too many submissions. Please try again later." }, { status: 429 });
 
   let body: unknown;
-  try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid request." }, { status: 400 }); }
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
 
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Please check the required fields and vehicle information." }, { status: 400 });
+    return NextResponse.json(validationMessage(parsed.error), { status: 400 });
   }
 
   const config = getSupabasePublicConfig();
@@ -55,11 +110,11 @@ export async function POST(request: NextRequest) {
     p_phone: data.phone,
     p_email: data.email || null,
     p_company_name: data.companyName || null,
-    p_year: data.year === "" || data.year === undefined ? null : data.year,
+    p_year: data.year ?? null,
     p_make: data.make,
     p_model: data.model,
     p_vin: data.vin || null,
-    p_mileage: data.mileage === "" || data.mileage === undefined ? null : data.mileage,
+    p_mileage: data.mileage ?? null,
     p_unit_number: data.unitNumber || null,
     p_complaint: data.complaint,
     p_known_codes: data.knownCodes || null,
