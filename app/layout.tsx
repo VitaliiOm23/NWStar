@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { RoFlexEnhancer } from "@/components/RoFlexEnhancer";
 import "./globals.css";
 import "./classic-site.css";
 import "./customer-portal.css";
@@ -16,5 +17,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body><RoFlexEnhancer />{children}</body></html>;
 }
