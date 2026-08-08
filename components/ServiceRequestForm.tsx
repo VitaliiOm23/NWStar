@@ -23,10 +23,18 @@ export function ServiceRequestForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
+
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      setState("error");
+      setMessage("Please correct the highlighted field and try again.");
+      return;
+    }
+
     setState("submitting");
     setMessage("");
 
-    const form = event.currentTarget;
     const body = Object.fromEntries(new FormData(form).entries());
 
     try {
@@ -61,7 +69,7 @@ export function ServiceRequestForm({
   }
 
   return (
-    <form className="form service-request-form" onSubmit={submit} noValidate>
+    <form className="form service-request-form" onSubmit={submit}>
       <div className="form-heading">
         <span>Service request</span>
         <h2>Vehicle and complaint details</h2>
@@ -72,7 +80,7 @@ export function ServiceRequestForm({
         <legend>Contact</legend>
         <div className="form-grid">
           <div className="field"><label htmlFor="fullName">Name *</label><input id="fullName" name="fullName" autoComplete="name" required minLength={2} maxLength={100} /></div>
-          <div className="field"><label htmlFor="phone">Phone *</label><input id="phone" name="phone" type="tel" autoComplete="tel" required maxLength={30} /></div>
+          <div className="field"><label htmlFor="phone">Phone *</label><input id="phone" name="phone" type="tel" autoComplete="tel" required minLength={7} maxLength={30} /></div>
           <div className="field"><label htmlFor="email">Email</label><input id="email" name="email" type="email" autoComplete="email" maxLength={160} /></div>
           <div className="field"><label htmlFor="companyName">Company or fleet</label><input id="companyName" name="companyName" maxLength={120} /></div>
         </div>
@@ -81,11 +89,11 @@ export function ServiceRequestForm({
       <fieldset className="form-section">
         <legend>Vehicle</legend>
         <div className="form-grid">
-          <div className="field"><label htmlFor="year">Year</label><input id="year" name="year" inputMode="numeric" placeholder="2024" maxLength={4} /></div>
-          <div className="field"><label htmlFor="make">Make *</label><input id="make" name="make" required maxLength={60} placeholder="Mercedes-Benz, Ford, Tesla, Toyota…" /></div>
+          <div className="field"><label htmlFor="year">Year</label><input id="year" name="year" inputMode="numeric" placeholder="2024" maxLength={4} pattern="[0-9]{4}" title="Enter a 4-digit year, or leave this blank." /></div>
+          <div className="field"><label htmlFor="make">Make *</label><input id="make" name="make" required minLength={2} maxLength={60} placeholder="Mercedes-Benz, Ford, Tesla, Toyota…" /></div>
           <div className="field"><label htmlFor="model">Model *</label><input id="model" name="model" required maxLength={80} placeholder="Sprinter 2500, Transit, Model 3…" /></div>
-          <div className="field"><label htmlFor="mileage">Mileage</label><input id="mileage" name="mileage" inputMode="numeric" /></div>
-          <div className="field full"><label htmlFor="serviceLocation">Vehicle location *</label><input id="serviceLocation" name="serviceLocation" required maxLength={240} placeholder="City or service address" /></div>
+          <div className="field"><label htmlFor="mileage">Mileage</label><input id="mileage" name="mileage" inputMode="numeric" pattern="[0-9, ]*" placeholder="85,000" title="Enter mileage using numbers; commas are okay." /></div>
+          <div className="field full"><label htmlFor="serviceLocation">Vehicle location *</label><input id="serviceLocation" name="serviceLocation" required minLength={2} maxLength={240} placeholder="City or service address" /></div>
         </div>
       </fieldset>
 
@@ -101,7 +109,7 @@ export function ServiceRequestForm({
       <details className="optional-details">
         <summary>Add optional VIN, fault codes and previous repair details</summary>
         <div className="optional-details-body form-grid">
-          <div className="field"><label htmlFor="vin">VIN (optional)</label><input id="vin" name="vin" minLength={17} maxLength={17} autoCapitalize="characters" placeholder="17-character VIN" /></div>
+          <div className="field"><label htmlFor="vin">VIN (optional)</label><input id="vin" name="vin" minLength={17} maxLength={17} pattern="[A-HJ-NPR-Za-hj-npr-z0-9]{17}" title="Enter a valid 17-character VIN, or leave this blank." autoCapitalize="characters" placeholder="17-character VIN" /></div>
           <div className="field"><label htmlFor="unitNumber">Fleet unit number</label><input id="unitNumber" name="unitNumber" maxLength={40} /></div>
           <div className="field full"><label htmlFor="knownCodes">Known fault codes</label><textarea id="knownCodes" name="knownCodes" maxLength={2000} placeholder="Include exact code numbers and control units when available." /></div>
           <div className="field full"><label htmlFor="priorWork">Previous diagnosis or repair attempts</label><textarea id="priorWork" name="priorWork" maxLength={3000} placeholder="List recent repairs, parts replaced or tests already performed." /></div>
