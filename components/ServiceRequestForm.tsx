@@ -102,7 +102,7 @@ export function ServiceRequestForm({
         <div className="form-grid">
           <div className="field"><label htmlFor="urgency">Vehicle status</label><select id="urgency" name="urgency" defaultValue="normal"><option value="normal">Driveable / normal priority</option><option value="vehicle-down">Vehicle is down</option><option value="fleet-priority">Fleet priority</option></select></div>
           <div className="field"><label htmlFor="preferredTime">Preferred timing</label><input id="preferredTime" name="preferredTime" maxLength={120} placeholder="Weekday evening, Saturday, etc." /></div>
-          <div className="field full"><label htmlFor="complaint">What is the vehicle doing? *</label><textarea id="complaint" name="complaint" required minLength={10} maxLength={4000} defaultValue={initialComplaint} placeholder="Describe the warning message, symptom, sound or drivability problem. Include when it happens and whether the vehicle still starts and drives." /></div>
+          <div className="field full"><label htmlFor="complaint">What is the vehicle doing? *</label><textarea id="complaint" name="complaint" required maxLength={4000} defaultValue={initialComplaint} placeholder="Describe the warning message, symptom, sound or drivability problem. Include when it happens and whether the vehicle still starts and drives." /></div>
         </div>
       </fieldset>
 
