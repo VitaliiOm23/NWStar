@@ -23,16 +23,19 @@ function isValidHttpUrl(value: string | undefined) {
 function getSupabaseConfig() {
   const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const url = isValidHttpUrl(configuredUrl)
-    ? configuredUrl as string
+    ? (configuredUrl as string)
     : FALLBACK_SUPABASE_URL;
 
+  // Prefer the legacy anon key when both are present. The current Vercel
+  // publishable-key value is being rejected by this Supabase project, while
+  // an existing anon key may still be valid during the key migration.
   const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
 
   if (!key) {
     throw new Error(
-      "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
+      "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
     );
   }
 
