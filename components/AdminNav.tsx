@@ -1,23 +1,21 @@
 import Link from "next/link";
 
 const links = [
-  ["Requests", "/admin"],
-  ["Repair orders", "/admin/repair-orders"],
+  ["Requests", "/admin", "requests"],
+  ["Repair orders", "/admin/repair-orders", "repair-orders"],
+  ["Finance", "/admin/finance", "finance"],
 ] as const;
 
-export function AdminNav({ current }: { current: "requests" | "repair-orders" }) {
+type AdminSection = (typeof links)[number][2];
+
+export function AdminNav({ current }: { current: AdminSection }) {
   return (
     <nav className="admin-nav" aria-label="Owner operations">
-      {links.map(([label, href]) => {
-        const active =
-          (current === "requests" && href === "/admin") ||
-          (current === "repair-orders" && href === "/admin/repair-orders");
-        return (
-          <Link className={active ? "active" : ""} href={href} key={href}>
-            {label}
-          </Link>
-        );
-      })}
+      {links.map(([label, href, section]) => (
+        <Link className={current === section ? "active" : ""} href={href} key={href}>
+          {label}
+        </Link>
+      ))}
     </nav>
   );
 }
