@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { getSupabasePublicConfig } from "@/lib/supabase/config";
 
 const requestSchema = z.object({
   fullName: z.string().trim().min(2).max(100),
@@ -44,12 +45,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Please check the required fields and vehicle information." }, { status: 400 });
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return NextResponse.json({ error: "Service intake is not configured yet." }, { status: 503 });
+  const config = getSupabasePublicConfig();
+  if (!config) return NextResponse.json({ error: "Service intake is not configured yet." }, { status: 503 });
 
   const data = parsed.data;
-  const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const supabase = createClient(config.url, config.key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: result, error } = await supabase.rpc("submit_service_request", {
     p_full_name: data.fullName,
     p_phone: data.phone,
