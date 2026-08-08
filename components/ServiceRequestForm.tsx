@@ -74,8 +74,8 @@ export function ServiceRequestForm({ initialComplaint = "" }: ServiceRequestForm
         <legend>Vehicle</legend>
         <div className="form-grid">
           <div className="field"><label htmlFor="year">Year</label><input id="year" name="year" inputMode="numeric" placeholder="2024" maxLength={4} /></div>
-          <div className="field"><label htmlFor="make">Make *</label><input id="make" name="make" required maxLength={60} defaultValue="Mercedes-Benz" /></div>
-          <div className="field"><label htmlFor="model">Model *</label><input id="model" name="model" required maxLength={80} placeholder="Sprinter 2500" /></div>
+          <div className="field"><label htmlFor="make">Make *</label><input id="make" name="make" required maxLength={60} placeholder="Mercedes-Benz, Ford, Tesla, Toyota…" /></div>
+          <div className="field"><label htmlFor="model">Model *</label><input id="model" name="model" required maxLength={80} placeholder="Sprinter 2500, Transit, Model 3…" /></div>
           <div className="field"><label htmlFor="mileage">Mileage</label><input id="mileage" name="mileage" inputMode="numeric" /></div>
           <div className="field full"><label htmlFor="serviceLocation">Vehicle location *</label><input id="serviceLocation" name="serviceLocation" required maxLength={240} placeholder="City or service address" /></div>
         </div>
