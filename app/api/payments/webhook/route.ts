@@ -125,12 +125,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Payment reconciliation failed." }, { status: 500 });
     }
 
-    const actorName = session.customer_details?.name || null;
-    const actorContact = session.customer_details?.email || session.customer_details?.phone || null;
+    const [{ data: portalLink }, actorName, actorContact] = await Promise.all([
+      supabase.from("customer_portal_links").select("id").eq("token", portalToken).maybeSingle(),
+      Promise.resolve(session.customer_details?.name || null),
+      Promise.resolve(session.customer_details?.email || session.customer_details?.phone || null),
+    ]);
+
     const { error: eventError } = await supabase.from("customer_portal_events").insert({
       repair_order_id: repairOrderId,
-      portal_token: portalToken,
+      portal_link_id: portalLink?.id || null,
+      invoice_id: invoiceId,
       event_type: "payment_succeeded",
+      actor_type: "customer",
       actor_name: actorName,
       actor_contact: actorContact,
       channel: "web",
