@@ -7,30 +7,18 @@ type CookieToSet = {
   options: CookieOptions;
 };
 
-const FALLBACK_SUPABASE_URL = "https://vmahxncctgjqvlabplpy.supabase.co";
-
-function isValidHttpUrl(value: string | undefined) {
-  if (!value) return false;
-
-  try {
-    const parsed = new URL(value.trim());
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
+const SUPABASE_PROJECT_URL = "https://hloycmcsdcxgzsvbnvif.supabase.co";
+const SUPABASE_PROJECT_PUBLISHABLE_KEY = "sb_publishable_boVylxX5khHOhOutEL_9Aw_S0qmDAZa";
 
 export function getSupabaseUrl() {
-  const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  return isValidHttpUrl(configuredUrl)
-    ? (configuredUrl as string)
-    : FALLBACK_SUPABASE_URL;
+  return SUPABASE_PROJECT_URL;
 }
 
 export function getSupabasePublicKeyCandidates() {
   const candidates = [
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim(),
+    SUPABASE_PROJECT_PUBLISHABLE_KEY,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim(),
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim(),
   ].filter((value): value is string => Boolean(value));
 
   return [...new Set(candidates)];
@@ -46,9 +34,7 @@ export async function createSupabaseServerClient(keyOverride?: string) {
   const key = keyOverride?.trim() || getSupabasePublicKeyCandidates()[0];
 
   if (!key) {
-    throw new Error(
-      "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
-    );
+    throw new Error("Supabase public API key is unavailable.");
   }
 
   return createServerClient(url, key, {
@@ -72,10 +58,6 @@ export async function createSupabaseServerClient(keyOverride?: string) {
 export async function getWorkingSupabaseServerClient() {
   const keys = getSupabasePublicKeyCandidates();
 
-  if (keys.length === 0) {
-    throw new Error("No Supabase public API key is configured.");
-  }
-
   for (const key of keys) {
     const supabase = await createSupabaseServerClient(key);
     const {
@@ -90,5 +72,5 @@ export async function getWorkingSupabaseServerClient() {
     return { supabase, user, authError: error };
   }
 
-  throw new Error("Supabase rejected every configured public API key.");
+  throw new Error("Supabase rejected every available public API key.");
 }
