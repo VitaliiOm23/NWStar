@@ -20,31 +20,36 @@ function isValidHttpUrl(value: string | undefined) {
   }
 }
 
-function getSupabaseConfig() {
+export function getSupabaseUrl() {
   const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const url = isValidHttpUrl(configuredUrl)
+  return isValidHttpUrl(configuredUrl)
     ? (configuredUrl as string)
     : FALLBACK_SUPABASE_URL;
+}
 
-  // Prefer the legacy anon key when both are present. The current Vercel
-  // publishable-key value is being rejected by this Supabase project, while
-  // an existing anon key may still be valid during the key migration.
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
+export function getSupabasePublicKeyCandidates() {
+  const candidates = [
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim(),
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim(),
+  ].filter((value): value is string => Boolean(value));
+
+  return [...new Set(candidates)];
+}
+
+export function isInvalidApiKeyError(error: { message?: string } | null | undefined) {
+  return Boolean(error?.message?.toLowerCase().includes("invalid api key"));
+}
+
+export async function createSupabaseServerClient(keyOverride?: string) {
+  const cookieStore = await cookies();
+  const url = getSupabaseUrl();
+  const key = keyOverride?.trim() || getSupabasePublicKeyCandidates()[0];
 
   if (!key) {
     throw new Error(
       "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
     );
   }
-
-  return { url, key };
-}
-
-export async function createSupabaseServerClient() {
-  const cookieStore = await cookies();
-  const { url, key } = getSupabaseConfig();
 
   return createServerClient(url, key, {
     cookies: {
@@ -62,4 +67,28 @@ export async function createSupabaseServerClient() {
       },
     },
   });
+}
+
+export async function getWorkingSupabaseServerClient() {
+  const keys = getSupabasePublicKeyCandidates();
+
+  if (keys.length === 0) {
+    throw new Error("No Supabase public API key is configured.");
+  }
+
+  for (const key of keys) {
+    const supabase = await createSupabaseServerClient(key);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (isInvalidApiKeyError(error)) {
+      continue;
+    }
+
+    return { supabase, user, authError: error };
+  }
+
+  throw new Error("Supabase rejected every configured public API key.");
 }
