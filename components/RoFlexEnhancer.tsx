@@ -11,6 +11,7 @@ export function RoFlexEnhancer() {
     const match = pathname.match(/^\/(?:admin\/repair-orders|tech\/repair-orders)\/([^/]+)$/);
     return match?.[1] || null;
   }, [pathname]);
+  const canManageDiagnostic = /^\/admin\/repair-orders\/[^/]+$/.test(pathname);
 
   const [rate, setRate] = useState<number | null>(null);
   const [added, setAdded] = useState(false);
@@ -31,6 +32,10 @@ export function RoFlexEnhancer() {
     const observer = new MutationObserver(relaxValidation);
     observer.observe(document.body, { childList: true, subtree: true });
 
+    if (!canManageDiagnostic) {
+      return () => observer.disconnect();
+    }
+
     let cancelled = false;
     fetch(`/api/repair-orders/basic-diagnostic?repairOrderId=${encodeURIComponent(repairOrderId)}`)
       .then(async (response) => {
@@ -50,9 +55,9 @@ export function RoFlexEnhancer() {
       cancelled = true;
       observer.disconnect();
     };
-  }, [repairOrderId]);
+  }, [repairOrderId, canManageDiagnostic]);
 
-  if (!repairOrderId) return null;
+  if (!repairOrderId || !canManageDiagnostic) return null;
 
   async function addBasicDiagnostic() {
     setBusy(true);
