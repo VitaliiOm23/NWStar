@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabasePublicConfig } from "@/lib/supabase/config";
 
 type CookieToSet = {
   name: string;
@@ -9,18 +10,14 @@ type CookieToSet = {
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
+  const config = getSupabasePublicConfig();
 
-  const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!projectUrl || !publishableKey) {
+  if (!config) {
     return response;
   }
 
   try {
-    const supabase = createServerClient(projectUrl, publishableKey, {
+    const supabase = createServerClient(config.url, config.key, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
