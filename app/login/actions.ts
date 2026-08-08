@@ -15,13 +15,8 @@ export async function signIn(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    const message = error.message.toLowerCase();
-
-    if (message.includes("email not confirmed")) {
-      redirect("/login?error=Your%20Supabase%20owner%20email%20has%20not%20been%20confirmed.");
-    }
-
-    redirect("/login?error=Invalid%20email%20or%20password.%20Use%20the%20owner%20account%20created%20under%20Supabase%20Authentication%20%3E%20Users.");
+    const message = encodeURIComponent(error.message || "Unknown Supabase authentication error");
+    redirect(`/login?error=Supabase%20Auth%3A%20${message}`);
   }
 
   redirect("/admin");
