@@ -1,11 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireOwner } from "@/lib/auth/owner";
+import { requireTech } from "@/lib/auth/tech";
 
 function text(formData: FormData, name: string) {
   const value = String(formData.get(name) || "").trim();
   return value || null;
+}
+
+function refreshTechRepairOrder(repairOrderId: string) {
+  revalidatePath("/tech");
+  revalidatePath(`/tech/repair-orders/${repairOrderId}`);
+  revalidatePath(`/admin/repair-orders/${repairOrderId}`);
 }
 
 export async function updateTechLine(formData: FormData) {
@@ -14,41 +20,49 @@ export async function updateTechLine(formData: FormData) {
   const intent = text(formData, "intent") || "save";
   if (!repairOrderId || !jobId) return;
 
-  const { supabase } = await requireOwner();
-  const { data: existing, error: readError } = await supabase
-    .from("ro_jobs")
-    .select("authorization_status")
-    .eq("id", jobId)
-    .eq("repair_order_id", repairOrderId)
-    .maybeSingle();
-
-  if (readError || !existing) {
-    console.error("tech line lookup failed", readError?.message);
-    return;
-  }
-
-  const update: Record<string, string | null> = {
-    technician_findings: text(formData, "technicianFindings"),
-    correction_performed: text(formData, "correctionPerformed"),
-  };
-
-  if (intent === "complete" && ["approved", "completed"].includes(existing.authorization_status)) {
-    update.authorization_status = "completed";
-    update.completed_at = new Date().toISOString();
-  }
-
-  const { error } = await supabase
-    .from("ro_jobs")
-    .update(update)
-    .eq("id", jobId)
-    .eq("repair_order_id", repairOrderId);
+  const { supabase } = await requireTech();
+  const { error } = await supabase.rpc("tech_update_ro_job", {
+    p_repair_order_id: repairOrderId,
+    p_job_id: jobId,
+    p_findings: text(formData, "technicianFindings"),
+    p_recommendation: text(formData, "recommendedAction"),
+    p_correction: text(formData, "correctionPerformed"),
+    p_complete: intent === "complete",
+  });
 
   if (error) {
     console.error("tech line update failed", error.message);
     return;
   }
 
-  revalidatePath("/tech");
-  revalidatePath(`/tech/repair-orders/${repairOrderId}`);
-  revalidatePath(`/admin/repair-orders/${repairOrderId}`);
+  refreshTechRepairOrder(repairOrderId);
+}
+
+export async function submitTechParts(formData: FormData) {
+  const repairOrderId = text(formData, "repairOrderId");
+  const jobId = text(formData, "jobId");
+  const partsList = String(formData.get("partsList") || "");
+  if (!repairOrderId || !jobId) return;
+
+  const parts = partsList
+    .split(/\r?\n/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 50);
+
+  if (parts.length === 0) return;
+
+  const { supabase } = await requireTech();
+  const { error } = await supabase.rpc("tech_submit_part_requests", {
+    p_repair_order_id: repairOrderId,
+    p_job_id: jobId,
+    p_parts: parts,
+  });
+
+  if (error) {
+    console.error("tech part request submission failed", error.message);
+    return;
+  }
+
+  refreshTechRepairOrder(repairOrderId);
 }
