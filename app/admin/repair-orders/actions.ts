@@ -23,13 +23,17 @@ const estimateStatuses = new Set(["draft", "sent", "partially_approved", "approv
 const paymentMethods = new Set(["cash", "card", "check", "zelle", "ach", "bank_transfer", "financing", "other"]);
 const paymentStatuses = new Set(["pending", "succeeded", "failed", "refunded", "void"]);
 
+function rawText(formData: FormData, name: string) {
+  return String(formData.get(name) || "").trim();
+}
+
 function text(formData: FormData, name: string) {
-  const value = String(formData.get(name) || "").trim();
+  const value = rawText(formData, name);
   return value || null;
 }
 
 function numberValue(formData: FormData, name: string) {
-  const value = String(formData.get(name) || "").trim();
+  const value = rawText(formData, name);
   if (!value) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
@@ -38,10 +42,6 @@ function numberValue(formData: FormData, name: string) {
 function integerValue(formData: FormData, name: string) {
   const value = numberValue(formData, name);
   return value === null ? null : Math.round(value);
-}
-
-function isDiagnosticText(value: string | null | undefined) {
-  return /\b(?:diag|diagnose|diagnosed|diagnosing|diagnosis|diagnostic|diagnostics)\b/i.test(String(value || ""));
 }
 
 function revalidateRepairOrder(id: string) {
@@ -75,16 +75,29 @@ export async function createRepairOrderFromRequest(formData: FormData) {
 
 export async function updateRepairOrder(formData: FormData) {
   const repairOrderId = text(formData, "repairOrderId");
-  const status = text(formData, "status");
-  if (!repairOrderId || !status || !roStatuses.has(status)) return;
+  if (!repairOrderId) return;
 
-  const taxPercent = numberValue(formData, "taxPercent");
   const { supabase } = await requireOwner();
+  const { data: existing, error: existingError } = await supabase
+    .from("repair_orders")
+    .select("status")
+    .eq("id", repairOrderId)
+    .single();
+
+  if (existingError) {
+    console.error("repair order lookup failed", existingError.message);
+    return;
+  }
+
+  const requestedStatus = text(formData, "status");
+  const status = requestedStatus && roStatuses.has(requestedStatus) ? requestedStatus : existing.status;
+  const taxPercent = numberValue(formData, "taxPercent");
+
   const { error } = await supabase
     .from("repair_orders")
     .update({
       status,
-      original_complaint: text(formData, "originalComplaint"),
+      original_complaint: rawText(formData, "originalComplaint"),
       customer_instructions: text(formData, "customerInstructions"),
       estimate_choice: text(formData, "estimateChoice") || "written_estimate",
       authorized_limit: numberValue(formData, "authorizedLimit"),
@@ -119,9 +132,7 @@ export async function updateLaborRate(formData: FormData) {
 
 export async function addRepairOrderJob(formData: FormData) {
   const repairOrderId = text(formData, "repairOrderId");
-  const title = text(formData, "title");
-  const concern = text(formData, "customerConcern");
-  if (!repairOrderId || !title || !concern) return;
+  if (!repairOrderId) return;
 
   const { supabase } = await requireOwner();
   const { data: latest } = await supabase
@@ -133,6 +144,9 @@ export async function addRepairOrderJob(formData: FormData) {
     .maybeSingle();
 
   const lineNumber = (latest?.line_number || 0) + 1;
+  const title = rawText(formData, "title") || `Service line ${lineNumber}`;
+  const concern = rawText(formData, "customerConcern");
+
   const { error } = await supabase.from("ro_jobs").insert({
     repair_order_id: repairOrderId,
     line_number: lineNumber,
@@ -150,16 +164,22 @@ export async function addRepairOrderJob(formData: FormData) {
 export async function updateRepairOrderJob(formData: FormData) {
   const repairOrderId = text(formData, "repairOrderId");
   const jobId = text(formData, "jobId");
-  const status = text(formData, "authorizationStatus");
-  if (!repairOrderId || !jobId || !status || !jobStatuses.has(status)) return;
+  if (!repairOrderId || !jobId) return;
 
   const { supabase, user } = await requireOwner();
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("ro_jobs")
-    .select("authorization_status")
+    .select("authorization_status,title,customer_concern")
     .eq("id", jobId)
     .single();
 
+  if (existingError) {
+    console.error("repair order job lookup failed", existingError.message);
+    return;
+  }
+
+  const requestedStatus = text(formData, "authorizationStatus");
+  const status = requestedStatus && jobStatuses.has(requestedStatus) ? requestedStatus : existing.authorization_status;
   const decisionMade = ["approved", "deferred", "declined", "completed"].includes(status);
   const authorizationMethod = text(formData, "authorizationMethod");
   const authorizedByName = text(formData, "authorizedByName");
@@ -169,8 +189,8 @@ export async function updateRepairOrderJob(formData: FormData) {
   const { error } = await supabase
     .from("ro_jobs")
     .update({
-      title: text(formData, "title"),
-      customer_concern: text(formData, "customerConcern"),
+      title: rawText(formData, "title"),
+      customer_concern: rawText(formData, "customerConcern"),
       technician_findings: text(formData, "technicianFindings"),
       recommended_action: text(formData, "recommendedAction"),
       correction_performed: text(formData, "correctionPerformed"),
@@ -187,7 +207,7 @@ export async function updateRepairOrderJob(formData: FormData) {
 
   if (error) {
     console.error("repair order job update failed", error.message);
-  } else if (existing?.authorization_status !== status && decisionMade && authorizationMethod && authorizedByName) {
+  } else if (existing.authorization_status !== status && decisionMade && authorizationMethod && authorizedByName) {
     const { error: authorizationError } = await supabase.from("ro_authorizations").insert({
       repair_order_id: repairOrderId,
       ro_job_id: jobId,
@@ -210,40 +230,31 @@ export async function addJobItem(formData: FormData) {
   const repairOrderId = text(formData, "repairOrderId");
   const jobId = text(formData, "jobId");
   const itemType = text(formData, "itemType");
-  const description = text(formData, "description");
-  const quantity = numberValue(formData, "quantity");
-
-  if (!repairOrderId || !jobId || !itemType || !itemTypes.has(itemType) || !description || quantity === null || quantity <= 0) return;
+  if (!repairOrderId || !jobId || !itemType || !itemTypes.has(itemType)) return;
 
   const { supabase } = await requireOwner();
-  let unitPrice = numberValue(formData, "unitPrice");
-  let quantityToBill = quantity;
+  const description = rawText(formData, "description") || titleForItemType(itemType);
+  const quantity = numberValue(formData, "quantity") ?? 1;
+  if (quantity <= 0) return;
 
+  let unitPrice = numberValue(formData, "unitPrice");
   if (itemType === "labor") {
-    const [{ data: repairOrder, error: rateError }, { data: job, error: jobError }] = await Promise.all([
-      supabase.from("repair_orders").select("labor_rate").eq("id", repairOrderId).single(),
-      supabase.from("ro_jobs").select("title,customer_concern").eq("id", jobId).single(),
-    ]);
+    const { data: repairOrder, error: rateError } = await supabase
+      .from("repair_orders")
+      .select("labor_rate")
+      .eq("id", repairOrderId)
+      .single();
 
     if (rateError) {
       console.error("labor rate lookup failed", rateError.message);
       return;
     }
-    if (jobError) console.error("job lookup for labor minimum failed", jobError.message);
 
     unitPrice = Number(repairOrder?.labor_rate ?? 100);
-
-    const diagnosticLabor =
-      isDiagnosticText(description) ||
-      isDiagnosticText(job?.title) ||
-      isDiagnosticText(job?.customer_concern);
-
-    if (diagnosticLabor) {
-      quantityToBill = Math.max(1, quantity);
-    }
   }
 
-  if (unitPrice === null || unitPrice < 0) return;
+  if (unitPrice === null) unitPrice = 0;
+  if (unitPrice < 0) return;
 
   const { error } = await supabase.from("ro_items").insert({
     ro_job_id: jobId,
@@ -251,7 +262,7 @@ export async function addJobItem(formData: FormData) {
     description,
     part_number: text(formData, "partNumber"),
     part_condition: text(formData, "partCondition"),
-    quantity: quantityToBill,
+    quantity,
     unit_cost: numberValue(formData, "unitCost"),
     unit_price: unitPrice,
     taxable: formData.get("taxable") === "yes",
@@ -259,6 +270,15 @@ export async function addJobItem(formData: FormData) {
 
   if (error) console.error("repair order item creation failed", error.message);
   revalidateRepairOrder(repairOrderId);
+}
+
+function titleForItemType(itemType: string) {
+  if (itemType === "labor") return "Labor";
+  if (itemType === "part") return "Part";
+  if (itemType === "fee") return "Fee";
+  if (itemType === "sublet") return "Sublet";
+  if (itemType === "discount") return "Discount";
+  return "RO item";
 }
 
 export async function removeJobItem(formData: FormData) {
@@ -287,11 +307,15 @@ export async function createEstimateSnapshot(formData: FormData) {
 export async function updateEstimate(formData: FormData) {
   const repairOrderId = text(formData, "repairOrderId");
   const estimateId = text(formData, "estimateId");
-  const status = text(formData, "status");
-  if (!repairOrderId || !estimateId || !status || !estimateStatuses.has(status)) return;
+  const requestedStatus = text(formData, "status");
+  if (!repairOrderId || !estimateId) return;
 
-  const now = new Date().toISOString();
   const { supabase } = await requireOwner();
+  const { data: existing, error: existingError } = await supabase.from("estimates").select("status").eq("id", estimateId).single();
+  if (existingError) return;
+  const status = requestedStatus && estimateStatuses.has(requestedStatus) ? requestedStatus : existing.status;
+  const now = new Date().toISOString();
+
   const { error } = await supabase
     .from("estimates")
     .update({
