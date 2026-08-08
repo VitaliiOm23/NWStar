@@ -12,12 +12,24 @@ export async function signIn(formData: FormData) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) {
-    const message = encodeURIComponent(error.message || "Unknown Supabase authentication error");
+  if (error || !authData.user) {
+    const message = encodeURIComponent(error?.message || "Unknown Supabase authentication error");
     redirect(`/login?error=Supabase%20Auth%3A%20${message}`);
   }
 
-  redirect("/admin");
+  const { data: isOwner } = await supabase.rpc("is_owner");
+  if (isOwner) redirect("/admin");
+
+  const { data: tech } = await supabase
+    .from("tech_users")
+    .select("active")
+    .eq("user_id", authData.user.id)
+    .maybeSingle();
+
+  if (tech?.active) redirect("/tech");
+
+  await supabase.auth.signOut();
+  redirect("/login?error=This%20account%20is%20not%20authorized%20for%20owner%20or%20technician%20access.");
 }
