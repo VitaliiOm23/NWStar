@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { signIn } from "./actions";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const metadata = {
   title: "Owner Login",
@@ -13,15 +11,6 @@ type LoginPageProps = {
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect("/admin");
-  }
-
   const { error } = await searchParams;
 
   return (
