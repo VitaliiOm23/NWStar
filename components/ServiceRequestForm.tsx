@@ -99,9 +99,9 @@ export function ServiceRequestForm({
       </fieldset>
 
       <details className="optional-details">
-        <summary>Add VIN, fault codes and previous repair details</summary>
+        <summary>Add optional VIN, fault codes and previous repair details</summary>
         <div className="optional-details-body form-grid">
-          <div className="field"><label htmlFor="vin">VIN</label><input id="vin" name="vin" minLength={17} maxLength={17} autoCapitalize="characters" /></div>
+          <div className="field"><label htmlFor="vin">VIN (optional)</label><input id="vin" name="vin" minLength={17} maxLength={17} autoCapitalize="characters" placeholder="17-character VIN" /></div>
           <div className="field"><label htmlFor="unitNumber">Fleet unit number</label><input id="unitNumber" name="unitNumber" maxLength={40} /></div>
           <div className="field full"><label htmlFor="knownCodes">Known fault codes</label><textarea id="knownCodes" name="knownCodes" maxLength={2000} placeholder="Include exact code numbers and control units when available." /></div>
           <div className="field full"><label htmlFor="priorWork">Previous diagnosis or repair attempts</label><textarea id="priorWork" name="priorWork" maxLength={3000} placeholder="List recent repairs, parts replaced or tests already performed." /></div>
