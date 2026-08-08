@@ -7,15 +7,32 @@ type CookieToSet = {
   options: CookieOptions;
 };
 
-function getSupabaseConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const FALLBACK_SUPABASE_URL = "https://vmahxncctgjqvlabplpy.supabase.co";
 
-  if (!url || !key) {
+function isValidHttpUrl(value: string | undefined) {
+  if (!value) return false;
+
+  try {
+    const parsed = new URL(value.trim());
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function getSupabaseConfig() {
+  const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const url = isValidHttpUrl(configuredUrl)
+    ? configuredUrl as string
+    : FALLBACK_SUPABASE_URL;
+
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+
+  if (!key) {
     throw new Error(
-      "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
+      "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY."
     );
   }
 
@@ -37,7 +54,7 @@ export async function createSupabaseServerClient() {
             cookieStore.set(name, value, options);
           });
         } catch {
-          // Server Components cannot always write cookies. Middleware refreshes them.
+          // Server Components cannot always write cookies.
         }
       },
     },
