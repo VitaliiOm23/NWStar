@@ -42,7 +42,7 @@ const requestSchema = z.object({
   serviceLocation: z.string().trim().min(2).max(240),
   preferredTime: z.string().trim().max(120).optional().default(""),
   urgency: z.enum(["normal", "vehicle-down", "fleet-priority"]),
-  complaint: z.string().trim().min(10).max(4000),
+  complaint: z.string().trim().min(1).max(4000),
   knownCodes: z.string().trim().max(2000).optional().default(""),
   priorWork: z.string().trim().max(3000).optional().default(""),
   website: z.string().max(0).optional().default(""),
@@ -64,7 +64,7 @@ function validationMessage(error: z.ZodError) {
     mileage: "Please enter mileage as a number (commas are okay), or leave it blank.",
     serviceLocation: "Please enter the vehicle location.",
     urgency: "Please select the vehicle status.",
-    complaint: "Please describe the vehicle concern using at least 10 characters.",
+    complaint: "Please enter the vehicle concern.",
     consent: "Please check the contact authorization box before submitting.",
     website: "Unable to submit this request.",
   };
