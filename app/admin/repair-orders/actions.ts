@@ -99,6 +99,17 @@ export async function updateRepairOrder(formData: FormData) {
   revalidateRepairOrder(repairOrderId);
 }
 
+export async function updateLaborRate(formData: FormData) {
+  const repairOrderId = text(formData, "repairOrderId");
+  const laborRate = numberValue(formData, "laborRate");
+  if (!repairOrderId || laborRate === null || laborRate < 0 || laborRate > 10000) return;
+
+  const { supabase } = await requireOwner();
+  const { error } = await supabase.from("repair_orders").update({ labor_rate: laborRate }).eq("id", repairOrderId);
+  if (error) console.error("labor rate update failed", error.message);
+  revalidateRepairOrder(repairOrderId);
+}
+
 export async function addRepairOrderJob(formData: FormData) {
   const repairOrderId = text(formData, "repairOrderId");
   const title = text(formData, "title");
@@ -194,11 +205,29 @@ export async function addJobItem(formData: FormData) {
   const itemType = text(formData, "itemType");
   const description = text(formData, "description");
   const quantity = numberValue(formData, "quantity");
-  const unitPrice = numberValue(formData, "unitPrice");
 
-  if (!repairOrderId || !jobId || !itemType || !itemTypes.has(itemType) || !description || !quantity || unitPrice === null) return;
+  if (!repairOrderId || !jobId || !itemType || !itemTypes.has(itemType) || !description || quantity === null || quantity <= 0) return;
 
   const { supabase } = await requireOwner();
+  let unitPrice = numberValue(formData, "unitPrice");
+
+  if (itemType === "labor") {
+    const { data: repairOrder, error: rateError } = await supabase
+      .from("repair_orders")
+      .select("labor_rate")
+      .eq("id", repairOrderId)
+      .single();
+
+    if (rateError) {
+      console.error("labor rate lookup failed", rateError.message);
+      return;
+    }
+
+    unitPrice = Number(repairOrder?.labor_rate ?? 100);
+  }
+
+  if (unitPrice === null || unitPrice < 0) return;
+
   const { error } = await supabase.from("ro_items").insert({
     ro_job_id: jobId,
     item_type: itemType,
