@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireOwner } from "@/lib/auth/owner";
+import { requireTech } from "@/lib/auth/tech";
 import { signOutOwner } from "@/app/admin/actions";
 
 export const metadata = {
@@ -66,7 +66,7 @@ export default async function TechQueuePage({
   searchParams: Promise<{ filter?: string; q?: string }>;
 }) {
   const { filter = "active", q = "" } = await searchParams;
-  const { supabase, user } = await requireOwner();
+  const { supabase, user, role, displayName } = await requireTech();
 
   const [{ data: roData, error }, { data: jobData }] = await Promise.all([
     supabase
@@ -145,11 +145,11 @@ export default async function TechQueuePage({
           <div>
             <div className="eyebrow">Technician workspace</div>
             <h1>Work Queue</h1>
-            <p>Pick an RO, then jump directly between its service lines without the billing and office controls.</p>
+            <p>Open an RO, move between assigned service lines, submit findings and recommendations, request parts, and complete approved work.</p>
           </div>
           <div className="tech-header-actions">
-            <span>{user.email}</span>
-            <Link className="button secondary" href="/admin/repair-orders">Owner view</Link>
+            <span>{displayName || user.email}</span>
+            {role === "owner" ? <Link className="button secondary" href="/admin/repair-orders">Owner view</Link> : null}
             <form action={signOutOwner}><button className="button secondary" type="submit">Sign out</button></form>
           </div>
         </header>
@@ -174,7 +174,7 @@ export default async function TechQueuePage({
           {visible.length === 0 && !error ? <div className="tech-empty">No repair orders match this view.</div> : null}
           {visible.map((ro) => {
             const roJobs = jobsByRo.get(ro.id) || [];
-            const firstOpen = roJobs.find((job) => ["approved", "pending"].includes(job.authorization_status) && job.authorization_status !== "completed") || roJobs[0];
+            const firstOpen = roJobs.find((job) => job.authorization_status === "approved") || roJobs.find((job) => job.authorization_status === "pending") || roJobs[0];
             const doneCount = roJobs.filter((job) => job.authorization_status === "completed").length;
             const href = firstOpen ? `/tech/repair-orders/${ro.id}?line=${firstOpen.id}` : `/tech/repair-orders/${ro.id}`;
 
@@ -194,7 +194,7 @@ export default async function TechQueuePage({
                   <div className="tech-ro-services-head"><span>Services</span><strong>{doneCount}/{roJobs.length} complete</strong></div>
                   {roJobs.slice(0, 4).map((job) => (
                     <div className="tech-ro-service-row" key={job.id}>
-                      <span>#{job.line_number} {job.title}</span>
+                      <span>#{job.line_number} {job.title || "Untitled service"}</span>
                       <b className={`tech-dot tech-dot-${job.authorization_status}`} title={titleCase(job.authorization_status)} />
                     </div>
                   ))}
@@ -205,7 +205,7 @@ export default async function TechQueuePage({
                   <span>Promised</span>
                   <strong>{promisedLabel(ro.promised_at)}</strong>
                   <span>Concern</span>
-                  <p>{ro.original_complaint}</p>
+                  <p>{ro.original_complaint || "No concern entered"}</p>
                   <b className="tech-open-arrow">Open →</b>
                 </div>
               </Link>
