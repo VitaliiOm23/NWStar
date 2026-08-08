@@ -4,6 +4,7 @@ import "./classic-site.css";
 import "./customer-portal.css";
 import "./owner.css";
 import "./owner-extensions.css";
+import "./tech.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://nwstardiagnostics.com"),
