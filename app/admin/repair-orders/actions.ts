@@ -40,11 +40,17 @@ function integerValue(formData: FormData, name: string) {
   return value === null ? null : Math.round(value);
 }
 
+function isDiagnosticText(value: string | null | undefined) {
+  return /\b(?:diag|diagnose|diagnosed|diagnosing|diagnosis|diagnostic|diagnostics)\b/i.test(String(value || ""));
+}
+
 function revalidateRepairOrder(id: string) {
   revalidatePath("/admin");
   revalidatePath("/admin/repair-orders");
   revalidatePath(`/admin/repair-orders/${id}`);
   revalidatePath(`/admin/repair-orders/${id}/print`);
+  revalidatePath("/tech");
+  revalidatePath(`/tech/repair-orders/${id}`);
 }
 
 export async function createRepairOrderFromRequest(formData: FormData) {
@@ -63,6 +69,7 @@ export async function createRepairOrderFromRequest(formData: FormData) {
 
   revalidatePath("/admin");
   revalidatePath("/admin/repair-orders");
+  revalidatePath("/tech");
   redirect(`/admin/repair-orders/${data}`);
 }
 
@@ -210,20 +217,30 @@ export async function addJobItem(formData: FormData) {
 
   const { supabase } = await requireOwner();
   let unitPrice = numberValue(formData, "unitPrice");
+  let quantityToBill = quantity;
 
   if (itemType === "labor") {
-    const { data: repairOrder, error: rateError } = await supabase
-      .from("repair_orders")
-      .select("labor_rate")
-      .eq("id", repairOrderId)
-      .single();
+    const [{ data: repairOrder, error: rateError }, { data: job, error: jobError }] = await Promise.all([
+      supabase.from("repair_orders").select("labor_rate").eq("id", repairOrderId).single(),
+      supabase.from("ro_jobs").select("title,customer_concern").eq("id", jobId).single(),
+    ]);
 
     if (rateError) {
       console.error("labor rate lookup failed", rateError.message);
       return;
     }
+    if (jobError) console.error("job lookup for labor minimum failed", jobError.message);
 
     unitPrice = Number(repairOrder?.labor_rate ?? 100);
+
+    const diagnosticLabor =
+      isDiagnosticText(description) ||
+      isDiagnosticText(job?.title) ||
+      isDiagnosticText(job?.customer_concern);
+
+    if (diagnosticLabor) {
+      quantityToBill = Math.max(1, quantity);
+    }
   }
 
   if (unitPrice === null || unitPrice < 0) return;
@@ -234,7 +251,7 @@ export async function addJobItem(formData: FormData) {
     description,
     part_number: text(formData, "partNumber"),
     part_condition: text(formData, "partCondition"),
-    quantity,
+    quantity: quantityToBill,
     unit_cost: numberValue(formData, "unitCost"),
     unit_price: unitPrice,
     taxable: formData.get("taxable") === "yes",
