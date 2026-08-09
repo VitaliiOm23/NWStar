@@ -10,8 +10,11 @@ function text(formData: FormData, name: string) {
 
 function refreshTechRepairOrder(repairOrderId: string) {
   revalidatePath("/tech");
+  revalidatePath("/tech/earnings");
   revalidatePath(`/tech/repair-orders/${repairOrderId}`);
   revalidatePath(`/admin/repair-orders/${repairOrderId}`);
+  revalidatePath(`/admin/repair-orders/${repairOrderId}/team`);
+  revalidatePath("/admin/people");
 }
 
 export async function updateTechLine(formData: FormData) {
@@ -41,28 +44,45 @@ export async function updateTechLine(formData: FormData) {
 export async function submitTechParts(formData: FormData) {
   const repairOrderId = text(formData, "repairOrderId");
   const jobId = text(formData, "jobId");
-  const partsList = String(formData.get("partsList") || "");
   if (!repairOrderId || !jobId) return;
-
-  const parts = partsList
-    .split(/\r?\n/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .slice(0, 50);
-
+  let parts: Array<Record<string, unknown>> = [];
+  try {
+    const parsed = JSON.parse(String(formData.get("partsJson") || "[]"));
+    if (Array.isArray(parsed)) parts = parsed.filter((part) => String(part?.description || "").trim()).slice(0, 50);
+  } catch {
+    return;
+  }
   if (parts.length === 0) return;
 
   const { supabase } = await requireTech();
-  const { error } = await supabase.rpc("tech_submit_part_requests", {
+  const { error } = await supabase.rpc("tech_submit_part_requests_v2", {
     p_repair_order_id: repairOrderId,
     p_job_id: jobId,
-    p_parts: parts,
+    p_items: parts,
   });
-
   if (error) {
-    console.error("tech part request submission failed", error.message);
+    console.error("tech structured part request submission failed", error.message);
     return;
   }
+  refreshTechRepairOrder(repairOrderId);
+}
 
+export async function startTechTimer(formData: FormData) {
+  const repairOrderId = text(formData, "repairOrderId");
+  const jobId = text(formData, "jobId");
+  if (!repairOrderId || !jobId) return;
+  const { supabase } = await requireTech();
+  const { error } = await supabase.rpc("tech_start_timer", { p_job_id: jobId });
+  if (error) console.error("technician timer start failed", error.message);
+  refreshTechRepairOrder(repairOrderId);
+}
+
+export async function stopTechTimer(formData: FormData) {
+  const repairOrderId = text(formData, "repairOrderId");
+  const jobId = text(formData, "jobId");
+  if (!repairOrderId || !jobId) return;
+  const { supabase } = await requireTech();
+  const { error } = await supabase.rpc("tech_stop_timer", { p_job_id: jobId });
+  if (error) console.error("technician timer stop failed", error.message);
   refreshTechRepairOrder(repairOrderId);
 }
