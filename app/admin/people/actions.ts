@@ -24,6 +24,7 @@ function refresh(repairOrderId?: string) {
   revalidatePath("/admin/pay");
   revalidatePath("/admin/repair-orders");
   revalidatePath("/tech");
+  revalidatePath("/tech/earnings");
   if (repairOrderId) {
     revalidatePath(`/admin/repair-orders/${repairOrderId}`);
     revalidatePath(`/admin/repair-orders/${repairOrderId}/team`);
@@ -136,12 +137,11 @@ export async function saveAssignment(formData: FormData) {
   if (!jobId || !workerId) return;
   const { supabase } = await requireOwner();
 
-  const { data: worker, error: workerError } = await supabase
-    .from("workers")
-    .select("compensation_method,compensation_rate")
-    .eq("id", workerId)
-    .single();
-  if (workerError || !worker) return;
+  const [{ data: worker, error: workerError }, { data: existing }] = await Promise.all([
+    supabase.from("workers").select("compensation_method,compensation_rate").eq("id", workerId).single(),
+    supabase.from("ro_job_assignments").select("id,pay_period_id").eq("ro_job_id", jobId).eq("worker_id", workerId).maybeSingle(),
+  ]);
+  if (workerError || !worker || existing?.pay_period_id) return;
 
   const requestedMethod = raw(formData, "compensationMethod");
   const method = payMethods.has(requestedMethod) ? requestedMethod : worker.compensation_method;
