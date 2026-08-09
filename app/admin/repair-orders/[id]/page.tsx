@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdminNav } from "@/components/AdminNav";
+import { BasicDiagnosticButton } from "@/components/BasicDiagnosticButton";
 import { requireOwner } from "@/lib/auth/owner";
 import { signOutOwner } from "../../actions";
 import {
-  addJobItem,
   addRepairOrderJob,
   createEstimateSnapshot,
   recordPayment,
@@ -14,278 +14,111 @@ import {
   updateInvoicePaymentLink,
   updateLaborRate,
   updateRepairOrder,
-  updateRepairOrderJob,
 } from "../actions";
+import { addWorkspaceItem, saveLineAuthorization, saveWorkLine } from "./workspace-actions";
 
-export const metadata = {
-  title: "Repair Order",
-  robots: { index: false, follow: false },
-};
+export const metadata = { title: "Repair Order", robots: { index: false, follow: false } };
+
+const roStatuses = ["draft", "awaiting_authorization", "authorized", "in_progress", "waiting_parts", "completed", "invoiced", "paid", "closed", "cancelled"];
+const authorizationStatuses = ["pending", "approved", "deferred", "declined"];
+const estimateStatuses = ["draft", "sent", "partially_approved", "approved", "declined", "expired"];
+const units = ["ea", "set", "kit", "qt", "gal", "L", "mL", "oz", "lb", "ft", "in", "bottle", "tube"];
+const views = [
+  ["work", "Work"],
+  ["details", "RO Details"],
+  ["approval", "Approval"],
+  ["billing", "Billing"],
+] as const;
+
+type View = (typeof views)[number][0];
 
 type RepairOrder = {
-  id: string;
-  ro_number: string;
-  service_request_id: string | null;
-  status: string;
-  original_complaint: string;
-  customer_instructions: string | null;
-  estimate_choice: string;
-  authorized_limit: number | null;
-  estimate_authorization_note: string | null;
-  parts_return_requested: boolean;
-  odometer_in: number | null;
-  odometer_out: number | null;
-  promised_at: string | null;
-  completed_at: string | null;
-  tax_rate: number;
-  labor_rate: number;
-  shop_supplies_amount: number;
-  shop_supplies_taxable: boolean;
-  discount_amount: number;
-  internal_notes: string | null;
-  opened_at: string;
-  updated_at: string;
-  customers: {
-    id: string;
-    full_name: string;
-    phone: string;
-    email: string | null;
-    company_name: string | null;
-  } | null;
-  vehicles: {
-    id: string;
-    year: number | null;
-    make: string;
-    model: string;
-    vin: string | null;
-    mileage: number | null;
-    license_plate: string | null;
-    unit_number: string | null;
-  } | null;
+  id: string; ro_number: string; status: string; original_complaint: string; customer_instructions: string | null;
+  estimate_choice: string; authorized_limit: number | null; estimate_authorization_note: string | null; parts_return_requested: boolean;
+  odometer_in: number | null; odometer_out: number | null; promised_at: string | null; completed_at: string | null;
+  tax_rate: number; labor_rate: number; shop_supplies_amount: number; shop_supplies_taxable: boolean; discount_amount: number;
+  internal_notes: string | null; opened_at: string; updated_at: string;
+  customers: { id: string; full_name: string; phone: string; email: string | null; company_name: string | null } | null;
+  vehicles: { id: string; year: number | null; make: string; model: string; vin: string | null; mileage: number | null; license_plate: string | null; unit_number: string | null } | null;
 };
 
 type RoJob = {
-  id: string;
-  repair_order_id: string;
-  line_number: number;
-  title: string;
-  customer_concern: string;
-  technician_findings: string | null;
-  recommended_action: string | null;
-  correction_performed: string | null;
-  authorization_status: string;
-  authorized_amount: number | null;
-  authorization_method: string | null;
-  authorized_by_name: string | null;
-  authorized_by_phone: string | null;
-  authorized_at: string | null;
-  deferred_reason: string | null;
+  id: string; repair_order_id: string; line_number: number; title: string; customer_concern: string;
+  technician_findings: string | null; recommended_action: string | null; correction_performed: string | null;
+  authorization_status: string; work_status: string; authorized_amount: number | null; authorization_method: string | null;
+  authorized_by_name: string | null; authorized_by_phone: string | null; authorized_at: string | null; deferred_reason: string | null;
 };
 
 type RoItem = {
-  id: string;
-  ro_job_id: string;
-  item_type: string;
-  description: string;
-  part_number: string | null;
-  part_condition: string | null;
-  quantity: number;
-  unit_cost: number | null;
-  unit_price: number;
-  taxable: boolean;
+  id: string; ro_job_id: string; item_type: string; description: string; part_number: string | null; part_condition: string | null;
+  quantity: number; unit: string; unit_cost: number | null; unit_price: number; taxable: boolean;
 };
 
 type Estimate = {
-  id: string;
-  estimate_number: string;
-  version: number;
-  status: string;
-  subtotal: number;
-  taxable_subtotal: number;
-  tax_amount: number;
-  total: number;
-  valid_until: string | null;
-  customer_note: string | null;
-  sent_at: string | null;
-  authorized_at: string | null;
-  authorization_method: string | null;
-  authorized_by_name: string | null;
-  authorization_note: string | null;
-  created_at: string;
+  id: string; estimate_number: string; version: number; status: string; subtotal: number; taxable_subtotal: number; tax_amount: number; total: number;
+  valid_until: string | null; customer_note: string | null; sent_at: string | null; authorized_at: string | null;
+  authorization_method: string | null; authorized_by_name: string | null; authorization_note: string | null; created_at: string;
 };
 
-type EstimateJob = {
-  estimate_id: string;
-  line_number: number;
-  title: string;
-  description: string | null;
-  amount: number;
-  decision: string;
-};
+type EstimateJob = { estimate_id: string; line_number: number; title: string; description: string | null; amount: number; decision: string };
+type Invoice = { id: string; invoice_number: string; status: string; subtotal: number; taxable_subtotal: number; tax_amount: number; total: number; amount_paid: number; balance_due: number; issued_at: string | null; due_at: string | null; payment_provider: string | null; hosted_payment_url: string | null; customer_note: string | null };
+type Payment = { id: string; amount: number; method: string; status: string; provider: string | null; provider_reference: string | null; notes: string | null; received_at: string };
+type Authorization = { id: string; ro_job_id: string | null; decision: string; authorized_amount: number | null; authorization_method: string; authorized_by_name: string; authorized_by_phone: string | null; employee_name: string | null; notes: string | null; authorized_at: string };
 
-type Invoice = {
-  id: string;
-  invoice_number: string;
-  status: string;
-  subtotal: number;
-  taxable_subtotal: number;
-  tax_amount: number;
-  total: number;
-  amount_paid: number;
-  balance_due: number;
-  issued_at: string | null;
-  due_at: string | null;
-  payment_provider: string | null;
-  hosted_payment_url: string | null;
-  customer_note: string | null;
-};
+function money(value: unknown) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value || 0)); }
+function titleCase(value: string | null | undefined) { return String(value || "").replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()); }
+function dateTimeLocal(value: string | null) { if (!value) return ""; const d = new Date(value); const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return local.toISOString().slice(0, 16); }
+function extended(item: RoItem) { const total = Number(item.quantity) * Number(item.unit_price); return item.item_type === "discount" ? -Math.abs(total) : total; }
+function qty(value: unknown) { const n = Number(value || 0); return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/0+$/, "").replace(/\.$/, ""); }
+function itemLabel(item: RoItem) { if (item.item_type === "labor") return `${qty(item.quantity)} hr × ${money(item.unit_price)}`; return `${qty(item.quantity)} ${item.unit || "ea"} × ${money(item.unit_price)}`; }
 
-type Payment = {
-  id: string;
-  amount: number;
-  method: string;
-  status: string;
-  provider: string | null;
-  provider_reference: string | null;
-  notes: string | null;
-  received_at: string;
-};
-
-type Authorization = {
-  id: string;
-  ro_job_id: string | null;
-  decision: string;
-  authorized_amount: number | null;
-  authorization_method: string;
-  authorized_by_name: string;
-  authorized_by_phone: string | null;
-  employee_name: string | null;
-  notes: string | null;
-  authorized_at: string;
-};
-
-const roStatuses = [
-  "draft",
-  "awaiting_authorization",
-  "authorized",
-  "in_progress",
-  "waiting_parts",
-  "completed",
-  "invoiced",
-  "paid",
-  "closed",
-  "cancelled",
-];
-
-const jobStatuses = ["pending", "approved", "deferred", "declined", "completed"];
-const estimateStatuses = ["draft", "sent", "partially_approved", "approved", "declined", "expired"];
-
-function money(value: number | null | undefined) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(Number(value || 0));
-}
-
-function titleCase(value: string | null | undefined) {
-  return String(value || "")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function dateTimeLocal(value: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
-}
-
-function extended(item: RoItem) {
-  const total = Number(item.quantity) * Number(item.unit_price);
-  return item.item_type === "discount" ? -Math.abs(total) : total;
-}
-
-export default async function RepairOrderDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function RepairOrderDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ view?: string; line?: string }> }) {
   const { id } = await params;
+  const query = await searchParams;
+  const requestedView = String(query.view || "work") as View;
+  const view: View = views.some(([key]) => key === requestedView) ? requestedView : "work";
   const { supabase, user } = await requireOwner();
 
-  const [
-    { data: roData, error: roError },
-    { data: jobsData },
-    { data: itemsData },
-    { data: estimatesData },
-    { data: estimateJobsData },
-    { data: invoiceData },
-    { data: authorizationsData },
-  ] = await Promise.all([
-    supabase
-      .from("repair_orders")
-      .select(
-        "id,ro_number,service_request_id,status,original_complaint,customer_instructions,estimate_choice,authorized_limit,estimate_authorization_note,parts_return_requested,odometer_in,odometer_out,promised_at,completed_at,tax_rate,labor_rate,shop_supplies_amount,shop_supplies_taxable,discount_amount,internal_notes,opened_at,updated_at,customers(id,full_name,phone,email,company_name),vehicles(id,year,make,model,vin,mileage,license_plate,unit_number)"
-      )
-      .eq("id", id)
-      .maybeSingle(),
-    supabase.from("ro_jobs").select("*").eq("repair_order_id", id).order("line_number"),
-    supabase
-      .from("ro_items")
-      .select("id,ro_job_id,item_type,description,part_number,part_condition,quantity,unit_cost,unit_price,taxable,created_at")
-      .in(
-        "ro_job_id",
-        (
-          await supabase.from("ro_jobs").select("id").eq("repair_order_id", id)
-        ).data?.map((job) => job.id) || ["00000000-0000-0000-0000-000000000000"]
-      )
-      .order("created_at"),
+  const [{ data: roData, error: roError }, { data: jobsData }, { data: estimatesData }, { data: invoiceData }, { data: authorizationsData }] = await Promise.all([
+    supabase.from("repair_orders").select("id,ro_number,status,original_complaint,customer_instructions,estimate_choice,authorized_limit,estimate_authorization_note,parts_return_requested,odometer_in,odometer_out,promised_at,completed_at,tax_rate,labor_rate,shop_supplies_amount,shop_supplies_taxable,discount_amount,internal_notes,opened_at,updated_at,customers(id,full_name,phone,email,company_name),vehicles(id,year,make,model,vin,mileage,license_plate,unit_number)").eq("id", id).maybeSingle(),
+    supabase.from("ro_jobs").select("id,repair_order_id,line_number,title,customer_concern,technician_findings,recommended_action,correction_performed,authorization_status,work_status,authorized_amount,authorization_method,authorized_by_name,authorized_by_phone,authorized_at,deferred_reason").eq("repair_order_id", id).order("line_number"),
     supabase.from("estimates").select("*").eq("repair_order_id", id).order("version", { ascending: false }),
-    supabase
-      .from("estimate_jobs")
-      .select("estimate_id,line_number,title,description,amount,decision")
-      .in(
-        "estimate_id",
-        (
-          await supabase.from("estimates").select("id").eq("repair_order_id", id)
-        ).data?.map((estimate) => estimate.id) || ["00000000-0000-0000-0000-000000000000"]
-      )
-      .order("line_number"),
     supabase.from("invoices").select("*").eq("repair_order_id", id).maybeSingle(),
     supabase.from("ro_authorizations").select("*").eq("repair_order_id", id).order("authorized_at", { ascending: false }),
   ]);
-
   if (roError || !roData) notFound();
 
   const ro = roData as unknown as RepairOrder;
   const jobs = (jobsData || []) as RoJob[];
-  const items = (itemsData || []) as RoItem[];
   const estimates = (estimatesData || []) as Estimate[];
-  const estimateJobs = (estimateJobsData || []) as EstimateJob[];
   const invoice = invoiceData as Invoice | null;
   const authorizations = (authorizationsData || []) as Authorization[];
+  const jobIds = jobs.map((job) => job.id);
+  const estimateIds = estimates.map((estimate) => estimate.id);
 
-  const { data: paymentData } = invoice
-    ? await supabase.from("payments").select("*").eq("invoice_id", invoice.id).order("received_at", { ascending: false })
-    : { data: [] };
-  const payments = (paymentData || []) as Payment[];
+  const [{ data: itemsData }, { data: estimateJobsData }, { data: paymentsData }] = await Promise.all([
+    jobIds.length ? supabase.from("ro_items").select("id,ro_job_id,item_type,description,part_number,part_condition,quantity,unit,unit_cost,unit_price,taxable").in("ro_job_id", jobIds).order("created_at") : Promise.resolve({ data: [] }),
+    estimateIds.length ? supabase.from("estimate_jobs").select("estimate_id,line_number,title,description,amount,decision").in("estimate_id", estimateIds).order("line_number") : Promise.resolve({ data: [] }),
+    invoice ? supabase.from("payments").select("*").eq("invoice_id", invoice.id).order("received_at", { ascending: false }) : Promise.resolve({ data: [] }),
+  ]);
 
+  const items = (itemsData || []) as RoItem[];
+  const estimateJobs = (estimateJobsData || []) as EstimateJob[];
+  const payments = (paymentsData || []) as Payment[];
   const itemsByJob = new Map<string, RoItem[]>();
-  items.forEach((item) => {
-    const current = itemsByJob.get(item.ro_job_id) || [];
-    current.push(item);
-    itemsByJob.set(item.ro_job_id, current);
-  });
-
+  items.forEach((item) => itemsByJob.set(item.ro_job_id, [...(itemsByJob.get(item.ro_job_id) || []), item]));
   const jobTotals = new Map<string, { subtotal: number; taxable: number }>();
   jobs.forEach((job) => {
-    const jobItems = itemsByJob.get(job.id) || [];
+    const lineItems = itemsByJob.get(job.id) || [];
     jobTotals.set(job.id, {
-      subtotal: jobItems.reduce((sum, item) => sum + extended(item), 0),
-      taxable: jobItems.reduce((sum, item) => sum + (item.taxable ? extended(item) : 0), 0),
+      subtotal: lineItems.reduce((sum, item) => sum + extended(item), 0),
+      taxable: lineItems.reduce((sum, item) => sum + (item.taxable ? extended(item) : 0), 0),
     });
   });
 
+  const selected = jobs.find((job) => job.id === query.line) || jobs.find((job) => job.work_status !== "completed") || jobs[0] || null;
+  const selectedItems = selected ? itemsByJob.get(selected.id) || [] : [];
+  const selectedTotal = selected ? jobTotals.get(selected.id)?.subtotal || 0 : 0;
   const fullJobsSubtotal = jobs.reduce((sum, job) => sum + (jobTotals.get(job.id)?.subtotal || 0), 0);
   const approvedJobs = jobs.filter((job) => ["approved", "completed"].includes(job.authorization_status));
   const approvedJobsSubtotal = approvedJobs.reduce((sum, job) => sum + (jobTotals.get(job.id)?.subtotal || 0), 0);
@@ -295,354 +128,264 @@ export default async function RepairOrderDetailPage({
   const approvedTaxableWithSupplies = approvedTaxable + (ro.shop_supplies_taxable ? Number(ro.shop_supplies_amount || 0) : 0);
   const approvedTax = approvedTaxableWithSupplies * Number(ro.tax_rate || 0);
   const approvedTotal = approvedBeforeTax + approvedTax;
+  const basicDiagnosticAdded = items.some((item) => item.item_type === "labor" && item.description === "Basic diagnostic");
 
   const customer = ro.customers;
   const vehicle = ro.vehicles;
   const vehicleName = vehicle ? `${vehicle.year || ""} ${vehicle.make} ${vehicle.model}`.trim() : "Vehicle unavailable";
 
   return (
-    <main className="admin-page ro-detail-page">
-      <div className="shell">
-        <header className="admin-header compact-admin-header">
-          <div>
-            <div className="eyebrow">{ro.ro_number}</div>
-            <h1>{vehicleName}</h1>
-            <p className="section-copy">{customer?.full_name || "Unknown customer"} · {titleCase(ro.status)}</p>
+    <main className="admin-page ro-detail-page ro-workspace-page">
+      <div className="shell ro-workspace-shell">
+        <header className="ro-workspace-header">
+          <div className="ro-workspace-title">
+            <Link href="/admin/repair-orders">← Repair orders</Link>
+            <div><span>{ro.ro_number}</span><h1>{vehicleName}</h1><p>{customer?.full_name || "Unknown customer"}{customer?.company_name ? ` · ${customer.company_name}` : ""}</p></div>
           </div>
-          <div className="admin-account">
-            <span>{user.email}</span>
-            <div className="admin-account-actions">
-              <Link className="button secondary" href={`/admin/repair-orders/${ro.id}/print`} target="_blank">Print RO</Link>
-              <form action={signOutOwner}><button className="button secondary" type="submit">Sign out</button></form>
-            </div>
-            <Link href="/">Public website →</Link>
+          <div className="ro-workspace-header-actions">
+            <span className={`status-pill status-${ro.status}`}>{titleCase(ro.status)}</span>
+            <Link className="button secondary" href={`/admin/repair-orders/${ro.id}/customer`}>Customer portal</Link>
+            <Link className="button secondary" href={`/admin/repair-orders/${ro.id}/print`} target="_blank">Print</Link>
+            <form action={signOutOwner}><button className="button secondary" type="submit">Sign out</button></form>
           </div>
         </header>
 
         <AdminNav current="repair-orders" />
 
-        <section className="ro-topbar">
-          <Link href="/admin/repair-orders">← All repair orders</Link>
-          <span className={`status-pill status-${ro.status}`}>{titleCase(ro.status)}</span>
+        <nav className="ro-workspace-tabs" aria-label="Repair order workspace">
+          {views.map(([key, label]) => <Link key={key} className={view === key ? "active" : ""} href={`/admin/repair-orders/${id}?view=${key}${selected ? `&line=${selected.id}` : ""}`}>{label}</Link>)}
+          <Link className="team-tab" href={`/admin/repair-orders/${id}/team`}>Team & Parts</Link>
+        </nav>
+
+        <section className="ro-workspace-summary">
+          <div><span>Customer complaint</span><strong>{ro.original_complaint || "No complaint entered"}</strong></div>
+          <div><span>Estimate</span><strong>{money(estimateBeforeTax)}</strong></div>
+          <div><span>Approved</span><strong>{money(approvedTotal)}</strong></div>
+          <div><span>Balance</span><strong>{invoice ? money(invoice.balance_due) : "Not invoiced"}</strong></div>
         </section>
 
-        <section className="ro-overview-grid ro-overview-compact">
-          <article className="admin-panel">
-            <div className="panel-label">Customer</div>
-            <h2>{customer?.full_name || "Unknown customer"}</h2>
-            <p>{customer?.company_name || ""}</p>
-            <p><a href={`tel:${customer?.phone || ""}`}>{customer?.phone || "—"}</a></p>
-            <p>{customer?.email || "—"}</p>
-          </article>
-          <article className="admin-panel">
-            <div className="panel-label">Vehicle</div>
-            <h2>{vehicleName}</h2>
-            <p>VIN: {vehicle?.vin || "—"}</p>
-            <p>Plate: {vehicle?.license_plate || "—"} · Unit: {vehicle?.unit_number || "—"}</p>
-            <p>Mileage: {vehicle?.mileage?.toLocaleString() || "—"}</p>
-          </article>
-          <article className="admin-panel financial-panel ro-money-summary">
-            <div className="panel-label">RO money</div>
-            <h2>{money(approvedTotal)}</h2>
-            <p>Estimate: {money(estimateBeforeTax)} · Balance: {invoice ? money(invoice.balance_due) : "Not invoiced"}</p>
-            <form action={updateLaborRate} className="labor-rate-form">
-              <input type="hidden" name="repairOrderId" value={ro.id} />
-              <label htmlFor="laborRate">Labor rate</label>
-              <div className="labor-rate-control">
-                <span>$</span>
-                <input id="laborRate" name="laborRate" type="number" min="0" step="0.01" defaultValue={Number(ro.labor_rate || 100).toFixed(2)} required />
-                <span>/hr</span>
-                <button className="button secondary" type="submit">Set</button>
+        {view === "work" ? (
+          <section className="ro-workspace-grid">
+            <aside className="ro-line-rail">
+              <div className="ro-line-rail-head"><div><span>Service lines</span><strong>{jobs.length}</strong></div><small>Open one line at a time</small></div>
+              <nav>
+                {jobs.map((job) => (
+                  <Link key={job.id} className={selected?.id === job.id ? "active" : ""} href={`/admin/repair-orders/${id}?view=work&line=${job.id}`}>
+                    <div><span>Line {job.line_number}</span><strong>{job.title || "Untitled service"}</strong></div>
+                    <div><small>{titleCase(job.work_status || job.authorization_status)}</small><b>{money(jobTotals.get(job.id)?.subtotal || 0)}</b></div>
+                  </Link>
+                ))}
+                {jobs.length === 0 ? <p className="admin-muted">No service lines yet.</p> : null}
+              </nav>
+              <details className="ro-add-line-simple" open={jobs.length === 0}>
+                <summary>+ Add service line</summary>
+                <form action={addRepairOrderJob}>
+                  <input type="hidden" name="repairOrderId" value={id} />
+                  <label>Title<input name="title" placeholder="Diagnose no-start" /></label>
+                  <label>Concern<textarea name="customerConcern" placeholder="What is this line for?" /></label>
+                  <button className="button" type="submit">Add line</button>
+                </form>
+              </details>
+            </aside>
+
+            <section className="ro-line-focus">
+              {!selected ? (
+                <div className="ro-workspace-empty"><h2>Add the first service line.</h2><p>The RO stays simple until there is actual work to track.</p></div>
+              ) : (
+                <>
+                  <header className="ro-line-focus-head">
+                    <div><span>Line {selected.line_number}</span><h2>{selected.title || "Untitled service"}</h2><p>{selected.customer_concern || "No concern entered."}</p></div>
+                    <div><span className={`status-pill status-${selected.work_status}`}>{titleCase(selected.work_status)}</span><strong>{money(selectedTotal)}</strong></div>
+                  </header>
+
+                  <form action={saveWorkLine} className="ro-line-focus-form">
+                    <input type="hidden" name="repairOrderId" value={id} /><input type="hidden" name="jobId" value={selected.id} />
+                    <div className="ro-two-fields"><label>Service title<input name="title" defaultValue={selected.title} /></label><label>Customer concern<textarea name="customerConcern" defaultValue={selected.customer_concern} /></label></div>
+                    <label>Findings / cause<textarea name="technicianFindings" defaultValue={selected.technician_findings || ""} placeholder="What was found?" /></label>
+                    <label>Recommendation<textarea name="recommendedAction" defaultValue={selected.recommended_action || ""} placeholder="What should happen next?" /></label>
+                    <label>Correction performed<textarea name="correctionPerformed" defaultValue={selected.correction_performed || ""} placeholder="What was actually done?" /></label>
+                    <div className="ro-save-row"><button className="button" type="submit">Save work</button><span>Only these work fields are changed.</span></div>
+                  </form>
+
+                  <section className="ro-line-items-simple">
+                    <div className="ro-section-bar"><div><span>Labor & parts</span><strong>{selectedItems.length} items</strong></div><b>{money(selectedTotal)}</b></div>
+                    <div className="ro-items-simple-list">
+                      {selectedItems.map((item) => (
+                        <div key={item.id} className="ro-item-simple">
+                          <span className="ro-item-type">{titleCase(item.item_type)}</span>
+                          <div><strong>{item.description}</strong><small>{itemLabel(item)}{item.part_number ? ` · ${item.part_number}` : ""}</small></div>
+                          <b>{money(extended(item))}</b>
+                          <form action={removeJobItem}><input type="hidden" name="repairOrderId" value={id} /><input type="hidden" name="itemId" value={item.id} /><button className="text-button danger" type="submit">Remove</button></form>
+                        </div>
+                      ))}
+                      {selectedItems.length === 0 ? <p className="admin-muted">No labor or parts added yet.</p> : null}
+                    </div>
+
+                    <div className="ro-add-items-row">
+                      <details open={selectedItems.length === 0}>
+                        <summary>+ Labor</summary>
+                        <form action={addWorkspaceItem} className="ro-compact-entry">
+                          <input type="hidden" name="repairOrderId" value={id} /><input type="hidden" name="jobId" value={selected.id} /><input type="hidden" name="itemType" value="labor" />
+                          <label>Description<input name="description" placeholder="Diagnostic labor" /></label>
+                          <label>Hours<input name="quantity" type="number" min="0.1" step="0.1" placeholder="1.0" /></label>
+                          <div className="ro-rate-readout"><span>Rate</span><strong>{money(ro.labor_rate)}/hr</strong></div>
+                          <button className="button secondary" type="submit">Add labor</button>
+                        </form>
+                      </details>
+                      <details>
+                        <summary>+ Part / fee</summary>
+                        <form action={addWorkspaceItem} className="ro-compact-entry ro-part-entry">
+                          <input type="hidden" name="repairOrderId" value={id} /><input type="hidden" name="jobId" value={selected.id} />
+                          <label>Type<select name="itemType" defaultValue="part"><option value="part">Part</option><option value="fee">Fee</option><option value="sublet">Sublet</option><option value="discount">Discount</option></select></label>
+                          <label>Description<input name="description" placeholder="Oil filter, seal, coolant…" /></label>
+                          <label>Part #<input name="partNumber" /></label>
+                          <label>Qty<input name="quantity" type="number" min="0.001" step="0.001" defaultValue="1" /></label>
+                          <label>Unit<select name="unit" defaultValue="ea">{units.map((unit) => <option value={unit} key={unit}>{unit}</option>)}</select></label>
+                          <label>Unit cost<input name="unitCost" type="number" min="0" step="0.01" /></label>
+                          <label>Customer price<input name="unitPrice" type="number" min="0" step="0.01" /></label>
+                          <label>Condition<select name="partCondition" defaultValue=""><option value="">Not set</option><option value="new_oem">New OEM</option><option value="new_aftermarket">New aftermarket</option><option value="rebuilt">Rebuilt</option><option value="used">Used</option><option value="customer_supplied">Customer supplied</option></select></label>
+                          <label className="checkbox-label"><input type="checkbox" name="taxable" value="yes" defaultChecked /> Taxable</label>
+                          <button className="button secondary" type="submit">Add item</button>
+                        </form>
+                      </details>
+                    </div>
+                  </section>
+                </>
+              )}
+            </section>
+
+            <aside className="ro-context-rail">
+              <BasicDiagnosticButton repairOrderId={id} rate={Number(ro.labor_rate || 100)} added={basicDiagnosticAdded} />
+              {selected ? (
+                <div className="ro-context-card">
+                  <span>Customer approval</span><strong>{titleCase(selected.authorization_status)}</strong><p>{money(selectedTotal)} on this line</p>
+                  <Link href={`/admin/repair-orders/${id}?view=approval&line=${selected.id}`}>Review approval →</Link>
+                </div>
+              ) : null}
+              <div className="ro-context-card">
+                <span>Team & parts</span><strong>Assignments, time & sourcing</strong><p>Keep production/pay and requested-parts workflow out of the main RO.</p>
+                <Link href={`/admin/repair-orders/${id}/team`}>Open Team & Parts →</Link>
               </div>
+              <div className="ro-context-card">
+                <span>Labor rate</span>
+                <form action={updateLaborRate} className="ro-rate-form"><input type="hidden" name="repairOrderId" value={id} /><div><span>$</span><input name="laborRate" type="number" min="0" step="0.01" defaultValue={Number(ro.labor_rate || 100).toFixed(2)} /><span>/hr</span></div><button className="button secondary" type="submit">Update</button></form>
+              </div>
+            </aside>
+          </section>
+        ) : null}
+
+        {view === "details" ? (
+          <section className="ro-view-panel">
+            <div className="ro-detail-cards">
+              <article><span>Customer</span><h2>{customer?.full_name || "Unknown customer"}</h2><p>{customer?.company_name || ""}</p><p>{customer?.phone || "—"}</p><p>{customer?.email || "—"}</p></article>
+              <article><span>Vehicle</span><h2>{vehicleName}</h2><p>VIN {vehicle?.vin || "—"}</p><p>Plate {vehicle?.license_plate || "—"} · Unit {vehicle?.unit_number || "—"}</p><p>Mileage {vehicle?.mileage?.toLocaleString() || "—"}</p></article>
+            </div>
+            <form action={updateRepairOrder} className="ro-details-form">
+              <input type="hidden" name="repairOrderId" value={id} />
+              <div className="ro-form-section"><div><h2>RO status & timing</h2><p>Operational details for this repair order.</p></div><div className="ro-form-grid">
+                <label>Status<select name="status" defaultValue={ro.status}>{roStatuses.map((status) => <option value={status} key={status}>{titleCase(status)}</option>)}</select></label>
+                <label>Promised<input name="promisedAt" type="datetime-local" defaultValue={dateTimeLocal(ro.promised_at)} /></label>
+                <label>Odometer in<input name="odometerIn" type="number" min="0" defaultValue={ro.odometer_in ?? ""} /></label>
+                <label>Odometer out<input name="odometerOut" type="number" min="0" defaultValue={ro.odometer_out ?? ""} /></label>
+                <label>Completed<input name="completedAt" type="datetime-local" defaultValue={dateTimeLocal(ro.completed_at)} /></label>
+              </div></div>
+              <div className="ro-form-section"><div><h2>Customer request</h2><p>What came in and any instructions attached to it.</p></div><div className="ro-form-grid">
+                <label className="full">Original complaint<textarea name="originalComplaint" defaultValue={ro.original_complaint} /></label>
+                <label className="full">Customer instructions<textarea name="customerInstructions" defaultValue={ro.customer_instructions || ""} /></label>
+                <label className="full">Internal notes<textarea name="internalNotes" defaultValue={ro.internal_notes || ""} /></label>
+              </div></div>
+              <div className="ro-form-section"><div><h2>Estimate & tax settings</h2><p>Keep these out of the daily work screen unless you need them.</p></div><div className="ro-form-grid">
+                <label>Estimate selection<select name="estimateChoice" defaultValue={ro.estimate_choice}><option value="written_estimate">Written estimate required</option><option value="authorized_limit">Proceed up to authorized limit</option><option value="estimate_waived">Written estimate waived</option></select></label>
+                <label>Authorized limit<input name="authorizedLimit" type="number" min="0" step="0.01" defaultValue={ro.authorized_limit ?? ""} /></label>
+                <label>Sales tax %<input name="taxPercent" type="number" min="0" max="100" step="0.001" defaultValue={(Number(ro.tax_rate || 0) * 100).toFixed(3)} /></label>
+                <label>Shop supplies<input name="shopSuppliesAmount" type="number" min="0" step="0.01" defaultValue={ro.shop_supplies_amount || 0} /></label>
+                <label>RO discount<input name="discountAmount" type="number" min="0" step="0.01" defaultValue={ro.discount_amount || 0} /></label>
+                <label className="full">Estimate / authorization note<textarea name="estimateAuthorizationNote" defaultValue={ro.estimate_authorization_note || ""} /></label>
+                <label className="checkbox-label"><input type="checkbox" name="partsReturnRequested" value="yes" defaultChecked={ro.parts_return_requested} /> Customer requested replaced parts</label>
+                <label className="checkbox-label"><input type="checkbox" name="shopSuppliesTaxable" value="yes" defaultChecked={ro.shop_supplies_taxable} /> Shop supplies taxable</label>
+              </div></div>
+              <div className="ro-save-row"><button className="button" type="submit">Save RO details</button></div>
             </form>
-          </article>
-        </section>
+          </section>
+        ) : null}
 
-        <section className="admin-panel complaint-panel compact-complaint-panel">
-          <div className="panel-label">Original customer complaint</div>
-          <p>{ro.original_complaint}</p>
-        </section>
-
-        <details className="admin-disclosure ro-details-dropdown">
-          <summary>RO details, status, odometer, tax and legal authorization</summary>
-          <form action={updateRepairOrder} className="admin-form-grid">
-            <input type="hidden" name="repairOrderId" value={ro.id} />
-            <div className="field"><label htmlFor="status">RO status</label><select id="status" name="status" defaultValue={ro.status}>{roStatuses.map((status) => <option value={status} key={status}>{titleCase(status)}</option>)}</select></div>
-            <div className="field"><label htmlFor="estimateChoice">Estimate selection</label><select id="estimateChoice" name="estimateChoice" defaultValue={ro.estimate_choice}><option value="written_estimate">Written estimate required</option><option value="authorized_limit">Proceed up to authorized limit</option><option value="estimate_waived">Written estimate waived</option></select></div>
-            <div className="field"><label htmlFor="authorizedLimit">Authorized limit</label><input id="authorizedLimit" name="authorizedLimit" type="number" min="0" step="0.01" defaultValue={ro.authorized_limit ?? ""} /></div>
-            <div className="field"><label htmlFor="taxPercent">Sales-tax rate (%)</label><input id="taxPercent" name="taxPercent" type="number" min="0" max="100" step="0.001" defaultValue={(Number(ro.tax_rate || 0) * 100).toFixed(3)} /></div>
-            <div className="field"><label htmlFor="odometerIn">Odometer in</label><input id="odometerIn" name="odometerIn" type="number" min="0" defaultValue={ro.odometer_in ?? ""} /></div>
-            <div className="field"><label htmlFor="odometerOut">Odometer out</label><input id="odometerOut" name="odometerOut" type="number" min="0" defaultValue={ro.odometer_out ?? ""} /></div>
-            <div className="field"><label htmlFor="promisedAt">Promised time</label><input id="promisedAt" name="promisedAt" type="datetime-local" defaultValue={dateTimeLocal(ro.promised_at)} /></div>
-            <div className="field"><label htmlFor="completedAt">Completed time</label><input id="completedAt" name="completedAt" type="datetime-local" defaultValue={dateTimeLocal(ro.completed_at)} /></div>
-            <div className="field"><label htmlFor="shopSuppliesAmount">Shop supplies / fees</label><input id="shopSuppliesAmount" name="shopSuppliesAmount" type="number" min="0" step="0.01" defaultValue={ro.shop_supplies_amount || 0} /></div>
-            <div className="field"><label htmlFor="discountAmount">RO discount</label><input id="discountAmount" name="discountAmount" type="number" min="0" step="0.01" defaultValue={ro.discount_amount || 0} /></div>
-            <div className="field full"><label htmlFor="originalComplaint">Original complaint</label><textarea id="originalComplaint" name="originalComplaint" defaultValue={ro.original_complaint} required /></div>
-            <div className="field full"><label htmlFor="customerInstructions">Customer instructions / requested work</label><textarea id="customerInstructions" name="customerInstructions" defaultValue={ro.customer_instructions || ""} /></div>
-            <div className="field full"><label htmlFor="estimateAuthorizationNote">Estimate or authorization note</label><textarea id="estimateAuthorizationNote" name="estimateAuthorizationNote" defaultValue={ro.estimate_authorization_note || ""} /></div>
-            <div className="field full"><label htmlFor="internalNotes">Internal notes</label><textarea id="internalNotes" name="internalNotes" defaultValue={ro.internal_notes || ""} /></div>
-            <label className="checkbox-label"><input type="checkbox" name="partsReturnRequested" value="yes" defaultChecked={ro.parts_return_requested} /> Customer requested replaced parts returned or shown</label>
-            <label className="checkbox-label"><input type="checkbox" name="shopSuppliesTaxable" value="yes" defaultChecked={ro.shop_supplies_taxable} /> Shop supplies are taxable</label>
-            <div className="field full"><button className="button" type="submit">Save repair order</button></div>
-          </form>
-        </details>
-
-        <section className="ro-section-heading ro-line-heading">
-          <div><div className="eyebrow">Jobs and recommendations</div><h2>RO lines</h2></div>
-          <span>{jobs.length} line{jobs.length === 1 ? "" : "s"}</span>
-        </section>
-
-        <section className="ro-line-workspace">
-          <aside className="admin-panel ro-line-sidebar">
-            <details className="ro-line-menu" open>
-              <summary>Repair-order lines</summary>
-              <nav className="ro-line-nav">
+        {view === "approval" ? (
+          <section className="ro-view-panel ro-approval-view">
+            <header className="ro-view-heading"><div><span>Customer authorization</span><h2>Approve work line by line.</h2><p>Technical work stays on Work. This screen is only decisions, estimates and authorization history.</p></div><Link className="button secondary" href={`/admin/repair-orders/${id}/customer`}>Open customer portal</Link></header>
+            <div className="ro-approval-grid">
+              <div className="ro-approval-lines">
                 {jobs.map((job) => {
                   const total = jobTotals.get(job.id)?.subtotal || 0;
                   return (
-                    <a href={`#line-${job.id}`} key={job.id}>
-                      <span><b>Line {job.line_number}</b><small>{job.title}</small></span>
-                      <span><small>{titleCase(job.authorization_status)}</small><strong>{money(total)}</strong></span>
-                    </a>
+                    <article className={`ro-approval-card ${selected?.id === job.id ? "selected" : ""}`} key={job.id}>
+                      <header><div><span>Line {job.line_number}</span><h3>{job.title || "Untitled service"}</h3><p>{job.recommended_action || job.customer_concern || "No recommendation entered."}</p></div><div><strong>{money(total)}</strong><span className={`status-pill status-${job.authorization_status}`}>{titleCase(job.authorization_status)}</span></div></header>
+                      <form action={saveLineAuthorization} className="ro-authorization-form">
+                        <input type="hidden" name="repairOrderId" value={id} /><input type="hidden" name="jobId" value={job.id} />
+                        <label>Decision<select name="authorizationStatus" defaultValue={job.authorization_status === "completed" ? "approved" : job.authorization_status}>{authorizationStatuses.map((status) => <option value={status} key={status}>{titleCase(status)}</option>)}</select></label>
+                        <label>Authorized amount<input name="authorizedAmount" type="number" min="0" step="0.01" defaultValue={job.authorized_amount ?? total.toFixed(2)} /></label>
+                        <label>Method<select name="authorizationMethod" defaultValue={job.authorization_method || ""}><option value="">Not recorded</option><option value="written">Written</option><option value="phone">Phone</option><option value="text">Text</option><option value="email">Email</option><option value="in_person">In person</option><option value="online">Online</option></select></label>
+                        <label>Authorized by<input name="authorizedByName" defaultValue={job.authorized_by_name || ""} /></label>
+                        <label>Phone<input name="authorizedByPhone" type="tel" defaultValue={job.authorized_by_phone || customer?.phone || ""} /></label>
+                        <label className="full">Deferred / declined reason<textarea name="deferredReason" defaultValue={job.deferred_reason || ""} /></label>
+                        <label className="full">Authorization note<textarea name="authorizationNote" /></label>
+                        <div className="full"><button className="button secondary" type="submit">Save decision</button></div>
+                      </form>
+                    </article>
                   );
                 })}
-                {jobs.length === 0 ? <p className="admin-muted">No lines yet.</p> : null}
-              </nav>
-            </details>
+              </div>
 
-            <details className="inline-disclosure ro-add-line-menu" open={jobs.length === 0}>
-              <summary>+ Add RO line</summary>
-              <form action={addRepairOrderJob} className="admin-form-grid sidebar-add-line-form">
-                <input type="hidden" name="repairOrderId" value={ro.id} />
-                <div className="field full"><label>Job title</label><input name="title" placeholder="Diagnose no-crank condition" required /></div>
-                <div className="field full"><label>Customer concern / requested job</label><textarea name="customerConcern" required /></div>
-                <div className="field full"><label>Initial findings</label><textarea name="technicianFindings" /></div>
-                <div className="field full"><label>Recommendation</label><textarea name="recommendedAction" /></div>
-                <div className="field full"><button className="button" type="submit">Add line</button></div>
-              </form>
-            </details>
-          </aside>
-
-          <section className="ro-job-panels">
-            {jobs.map((job) => {
-              const jobItems = itemsByJob.get(job.id) || [];
-              const totals = jobTotals.get(job.id) || { subtotal: 0, taxable: 0 };
-              return (
-                <article className="ro-job-card ro-job-panel" id={`line-${job.id}`} key={job.id}>
-                  <header className="ro-job-head ro-selected-line-head">
-                    <div>
-                      <span className="ro-line-number">Line {job.line_number}</span>
-                      <h2>{job.title}</h2>
-                    </div>
-                    <div className="ro-job-total">
-                      <span className={`status-pill status-${job.authorization_status}`}>{titleCase(job.authorization_status)}</span>
-                      <strong>{money(totals.subtotal)}</strong>
-                    </div>
-                  </header>
-
-                  <form action={updateRepairOrderJob} className="ro-line-edit-form">
-                    <input type="hidden" name="repairOrderId" value={ro.id} />
-                    <input type="hidden" name="jobId" value={job.id} />
-
-                    <details className="line-section" open>
-                      <summary><span>Concern, diagnosis and correction</span><small>What came in, what you found, what you recommend, what you did</small></summary>
-                      <div className="admin-form-grid ro-job-form">
-                        <div className="field"><label>Job title</label><input name="title" defaultValue={job.title} required /></div>
-                        <div className="field"><label>Customer decision</label><select name="authorizationStatus" defaultValue={job.authorization_status}>{jobStatuses.map((status) => <option value={status} key={status}>{titleCase(status)}</option>)}</select></div>
-                        <div className="field full"><label>Customer concern / requested job</label><textarea name="customerConcern" defaultValue={job.customer_concern} required /></div>
-                        <div className="field full"><label>Technician findings / cause</label><textarea name="technicianFindings" defaultValue={job.technician_findings || ""} /></div>
-                        <div className="field full"><label>Recommended work</label><textarea name="recommendedAction" defaultValue={job.recommended_action || ""} /></div>
-                        <div className="field full"><label>Correction performed</label><textarea name="correctionPerformed" defaultValue={job.correction_performed || ""} /></div>
-                      </div>
-                    </details>
-
-                    <details className="line-section">
-                      <summary><span>Authorization</span><small>{titleCase(job.authorization_status)}{job.authorized_amount !== null ? ` · ${money(job.authorized_amount)}` : ""}</small></summary>
-                      <div className="admin-form-grid">
-                        <div className="field"><label>Authorized amount</label><input name="authorizedAmount" type="number" min="0" step="0.01" defaultValue={job.authorized_amount ?? totals.subtotal.toFixed(2)} /></div>
-                        <div className="field"><label>Authorization method</label><select name="authorizationMethod" defaultValue={job.authorization_method || ""}><option value="">Not recorded</option><option value="written">Written</option><option value="phone">Phone</option><option value="text">Text message</option><option value="email">Email</option><option value="in_person">In person</option><option value="online">Online</option></select></div>
-                        <div className="field"><label>Authorized by</label><input name="authorizedByName" defaultValue={job.authorized_by_name || ""} placeholder="Customer or designee name" /></div>
-                        <div className="field"><label>Authorizer phone</label><input name="authorizedByPhone" type="tel" defaultValue={job.authorized_by_phone || customer?.phone || ""} /></div>
-                        <div className="field full"><label>Deferred / declined reason</label><textarea name="deferredReason" defaultValue={job.deferred_reason || ""} /></div>
-                        <div className="field full"><label>Authorization note</label><textarea name="authorizationNote" placeholder="Any limit, added work, date/time context, or exact wording from the customer." /></div>
-                      </div>
-                    </details>
-
-                    <div className="line-save-bar"><button className="button" type="submit">Save line</button></div>
-                  </form>
-
-                  <details className="line-section line-items-section" open={jobItems.length > 0}>
-                    <summary><span>Labor, parts, fees and discounts</span><small>{jobItems.length} item{jobItems.length === 1 ? "" : "s"} · {money(totals.subtotal)}</small></summary>
-
-                    <div className="ro-items-table">
-                      <div className="ro-items-head"><span>Type / Description</span><span>Qty / hrs</span><span>Rate / unit</span><span>Total</span><span /></div>
-                      {jobItems.length === 0 ? <p className="empty-line-items">No labor, parts, or fees added.</p> : null}
-                      {jobItems.map((item) => (
-                        <div className="ro-item-row" key={item.id}>
-                          <span><strong>{titleCase(item.item_type)}</strong><small>{item.description}{item.part_number ? ` · ${item.part_number}` : ""}{item.part_condition ? ` · ${titleCase(item.part_condition)}` : ""}{item.taxable ? " · Taxable" : ""}</small></span>
-                          <span>{Number(item.quantity).toFixed(item.item_type === "labor" ? 1 : 2)}</span>
-                          <span>{money(item.unit_price)}</span>
-                          <span><strong>{money(extended(item))}</strong></span>
-                          <form action={removeJobItem}><input type="hidden" name="repairOrderId" value={ro.id} /><input type="hidden" name="itemId" value={item.id} /><button className="text-button danger" type="submit">Remove</button></form>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="line-entry-grid">
-                      <details className="inline-disclosure labor-entry" open>
-                        <summary>Add labor · {money(ro.labor_rate)}/hr</summary>
-                        <form action={addJobItem} className="admin-form-grid compact-item-form">
-                          <input type="hidden" name="repairOrderId" value={ro.id} />
-                          <input type="hidden" name="jobId" value={job.id} />
-                          <input type="hidden" name="itemType" value="labor" />
-                          <div className="field full"><label>Labor description</label><input name="description" placeholder="Diagnostic labor, repair labor, programming…" required /></div>
-                          <div className="field"><label>Hours</label><input name="quantity" type="number" min="0.1" step="0.1" placeholder="1.3" required /></div>
-                          <div className="field labor-calculation-readout"><label>Pricing</label><div>{money(ro.labor_rate)} × hours</div></div>
-                          <label className="checkbox-label"><input type="checkbox" name="taxable" value="yes" defaultChecked /> Taxable</label>
-                          <div className="field full"><button className="button secondary" type="submit">Add labor</button></div>
-                        </form>
-                      </details>
-
-                      <details className="inline-disclosure">
-                        <summary>Add part, fee, sublet, or discount</summary>
-                        <form action={addJobItem} className="admin-form-grid compact-item-form">
-                          <input type="hidden" name="repairOrderId" value={ro.id} />
-                          <input type="hidden" name="jobId" value={job.id} />
-                          <div className="field"><label>Item type</label><select name="itemType" defaultValue="part"><option value="part">Part</option><option value="fee">Fee / shop supply</option><option value="sublet">Sublet</option><option value="discount">Line discount</option></select></div>
-                          <div className="field"><label>Description</label><input name="description" required /></div>
-                          <div className="field"><label>Part number</label><input name="partNumber" /></div>
-                          <div className="field"><label>Part condition</label><select name="partCondition" defaultValue=""><option value="">Not applicable</option><option value="new_oem">New OEM</option><option value="new_aftermarket">New aftermarket</option><option value="rebuilt">Rebuilt</option><option value="used">Used</option><option value="customer_supplied">Customer supplied</option></select></div>
-                          <div className="field"><label>Quantity</label><input name="quantity" type="number" min="0.001" step="0.001" defaultValue="1" required /></div>
-                          <div className="field"><label>Unit price</label><input name="unitPrice" type="number" min="0" step="0.01" required /></div>
-                          <div className="field"><label>Internal unit cost</label><input name="unitCost" type="number" min="0" step="0.01" /></div>
-                          <label className="checkbox-label"><input type="checkbox" name="taxable" value="yes" defaultChecked /> Taxable</label>
-                          <div className="field full"><button className="button secondary" type="submit">Add item</button></div>
-                        </form>
-                      </details>
-                    </div>
+              <aside className="ro-estimate-rail">
+                <article className="ro-context-card estimate-now"><span>Current estimate</span><strong>{money(estimateBeforeTax)}</strong><p>Before sales tax.</p><form action={createEstimateSnapshot}><input type="hidden" name="repairOrderId" value={id} /><button className="button" type="submit">Create estimate snapshot</button></form></article>
+                {estimates.map((estimate) => (
+                  <details className="ro-estimate-card" key={estimate.id}>
+                    <summary><span><strong>{estimate.estimate_number}</strong><small>{titleCase(estimate.status)}</small></span><b>{money(estimate.total)}</b></summary>
+                    <div className="ro-estimate-lines">{estimateJobs.filter((job) => job.estimate_id === estimate.id).map((job) => <div key={`${estimate.id}-${job.line_number}`}><span>Line {job.line_number} · {job.title}</span><b>{money(job.amount)}</b></div>)}</div>
+                    <form action={updateEstimate} className="ro-estimate-form"><input type="hidden" name="repairOrderId" value={id} /><input type="hidden" name="estimateId" value={estimate.id} />
+                      <label>Status<select name="status" defaultValue={estimate.status}>{estimateStatuses.map((status) => <option value={status} key={status}>{titleCase(status)}</option>)}</select></label>
+                      <label>Valid until<input name="validUntil" type="date" defaultValue={estimate.valid_until || ""} /></label>
+                      <label>Authorized by<input name="authorizedByName" defaultValue={estimate.authorized_by_name || ""} /></label>
+                      <label>Method<input name="authorizationMethod" defaultValue={estimate.authorization_method || ""} /></label>
+                      <label className="full">Customer note<textarea name="customerNote" defaultValue={estimate.customer_note || ""} /></label>
+                      <label className="full">Authorization note<textarea name="authorizationNote" defaultValue={estimate.authorization_note || ""} /></label>
+                      <div className="full"><button className="button secondary" type="submit">Update estimate</button></div>
+                    </form>
                   </details>
-                </article>
-              );
-            })}
-
-            {jobs.length === 0 ? (
-              <article className="admin-panel ro-empty-workspace">
-                <div className="eyebrow">No RO lines</div>
-                <h2>Add the first line from the menu on the left.</h2>
-              </article>
-            ) : null}
+                ))}
+                <details className="ro-history-card"><summary>Authorization history · {authorizations.length}</summary><div>{authorizations.map((auth) => <div className="ro-history-row" key={auth.id}><span>{new Date(auth.authorized_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })}</span><strong>{titleCase(auth.decision)} · {money(auth.authorized_amount)}</strong><small>{auth.authorized_by_name} · {titleCase(auth.authorization_method)}{auth.notes ? ` · ${auth.notes}` : ""}</small></div>)}</div></details>
+              </aside>
+            </div>
           </section>
-        </section>
+        ) : null}
 
-        <section className="ro-financial-workspace">
-          <div className="financial-column">
-            <div className="ro-section-heading"><div><div className="eyebrow">Customer authorization</div><h2>Estimates</h2></div></div>
-            <article className="admin-panel estimate-summary-panel">
-              <div className="financial-line"><span>All job lines</span><strong>{money(fullJobsSubtotal)}</strong></div>
-              <div className="financial-line"><span>Shop supplies / fees</span><strong>{money(ro.shop_supplies_amount)}</strong></div>
-              <div className="financial-line"><span>RO discount</span><strong>−{money(ro.discount_amount)}</strong></div>
-              <div className="financial-line total"><span>Current estimate before tax</span><strong>{money(estimateBeforeTax)}</strong></div>
-              <form action={createEstimateSnapshot}><input type="hidden" name="repairOrderId" value={ro.id} /><button className="button" type="submit">Create estimate snapshot</button></form>
-            </article>
-
-            {estimates.map((estimate) => (
-              <details className="admin-disclosure estimate-card" key={estimate.id}>
-                <summary><span>{estimate.estimate_number}</span><strong>{money(estimate.total)} · {titleCase(estimate.status)}</strong></summary>
-                <div className="estimate-job-snapshot">
-                  {estimateJobs.filter((job) => job.estimate_id === estimate.id).map((job) => (
-                    <div key={`${estimate.id}-${job.line_number}`}><span>Line {job.line_number}: {job.title}</span><strong>{money(job.amount)} · {titleCase(job.decision)}</strong></div>
-                  ))}
-                </div>
-                <form action={updateEstimate} className="admin-form-grid">
-                  <input type="hidden" name="repairOrderId" value={ro.id} />
-                  <input type="hidden" name="estimateId" value={estimate.id} />
-                  <div className="field"><label>Status</label><select name="status" defaultValue={estimate.status}>{estimateStatuses.map((status) => <option value={status} key={status}>{titleCase(status)}</option>)}</select></div>
-                  <div className="field"><label>Valid until</label><input name="validUntil" type="date" defaultValue={estimate.valid_until || ""} /></div>
-                  <div className="field"><label>Authorization method</label><input name="authorizationMethod" defaultValue={estimate.authorization_method || ""} /></div>
-                  <div className="field"><label>Authorized by</label><input name="authorizedByName" defaultValue={estimate.authorized_by_name || ""} /></div>
-                  <div className="field full"><label>Customer-facing note</label><textarea name="customerNote" defaultValue={estimate.customer_note || ""} /></div>
-                  <div className="field full"><label>Authorization note</label><textarea name="authorizationNote" defaultValue={estimate.authorization_note || ""} /></div>
-                  <div className="field full"><button className="button secondary" type="submit">Update estimate record</button></div>
-                </form>
-              </details>
-            ))}
-          </div>
-
-          <div className="financial-column">
-            <div className="ro-section-heading"><div><div className="eyebrow">Final billing</div><h2>Invoice and payments</h2></div></div>
-            <article className="admin-panel invoice-panel">
-              <div className="financial-line"><span>Approved work before tax</span><strong>{money(approvedBeforeTax)}</strong></div>
-              <div className="financial-line"><span>Estimated tax</span><strong>{money(approvedTax)}</strong></div>
-              <div className="financial-line total"><span>Approved total</span><strong>{money(approvedTotal)}</strong></div>
-              <form action={syncInvoice}><input type="hidden" name="repairOrderId" value={ro.id} /><button className="button" type="submit">{invoice ? "Refresh invoice totals" : "Create invoice from approved work"}</button></form>
-            </article>
-
-            {invoice ? (
-              <article className="admin-panel invoice-record">
-                <header><div><div className="panel-label">{invoice.invoice_number}</div><h2>{titleCase(invoice.status)}</h2></div><strong>{money(invoice.balance_due)} due</strong></header>
-                <div className="financial-line"><span>Subtotal</span><strong>{money(invoice.subtotal)}</strong></div>
-                <div className="financial-line"><span>Tax</span><strong>{money(invoice.tax_amount)}</strong></div>
-                <div className="financial-line"><span>Total</span><strong>{money(invoice.total)}</strong></div>
-                <div className="financial-line"><span>Paid</span><strong>{money(invoice.amount_paid)}</strong></div>
-                <div className="financial-line total"><span>Balance due</span><strong>{money(invoice.balance_due)}</strong></div>
-
-                <details className="inline-disclosure">
-                  <summary>Hosted payment link and due date</summary>
-                  <form action={updateInvoicePaymentLink} className="admin-form-grid">
-                    <input type="hidden" name="repairOrderId" value={ro.id} />
-                    <input type="hidden" name="invoiceId" value={invoice.id} />
-                    <div className="field"><label>Payment provider</label><input name="paymentProvider" defaultValue={invoice.payment_provider || ""} placeholder="Stripe, Square, Chase, other" /></div>
-                    <div className="field"><label>Due date / time</label><input name="dueAt" type="datetime-local" defaultValue={dateTimeLocal(invoice.due_at)} /></div>
-                    <div className="field full"><label>Hosted payment URL</label><input name="hostedPaymentUrl" type="url" defaultValue={invoice.hosted_payment_url || ""} /></div>
-                    <div className="field full"><label>Invoice note</label><textarea name="customerNote" defaultValue={invoice.customer_note || ""} /></div>
-                    <div className="field full"><button className="button secondary" type="submit">Save payment details</button></div>
-                  </form>
-                  {invoice.hosted_payment_url ? <a className="button secondary" href={invoice.hosted_payment_url} target="_blank" rel="noreferrer">Open payment page</a> : null}
-                </details>
-
-                <details className="inline-disclosure" open={payments.length === 0 && invoice.balance_due > 0}>
-                  <summary>Record a payment or refund</summary>
-                  <form action={recordPayment} className="admin-form-grid">
-                    <input type="hidden" name="repairOrderId" value={ro.id} />
-                    <input type="hidden" name="invoiceId" value={invoice.id} />
-                    <div className="field"><label>Amount</label><input name="amount" type="number" min="0.01" step="0.01" defaultValue={invoice.balance_due > 0 ? Number(invoice.balance_due).toFixed(2) : ""} required /></div>
-                    <div className="field"><label>Method</label><select name="method" defaultValue="card"><option value="cash">Cash</option><option value="card">Card</option><option value="check">Check</option><option value="zelle">Zelle</option><option value="ach">ACH</option><option value="bank_transfer">Bank transfer</option><option value="financing">Financing</option><option value="other">Other</option></select></div>
-                    <div className="field"><label>Status</label><select name="status" defaultValue="succeeded"><option value="succeeded">Succeeded</option><option value="pending">Pending</option><option value="failed">Failed</option><option value="refunded">Refunded</option><option value="void">Void</option></select></div>
-                    <div className="field"><label>Received at</label><input name="receivedAt" type="datetime-local" /></div>
-                    <div className="field"><label>Provider</label><input name="provider" placeholder="Square, Stripe, Chase, cash" /></div>
-                    <div className="field"><label>Reference</label><input name="providerReference" placeholder="Receipt, check, or transaction ID" /></div>
-                    <div className="field full"><label>Payment note</label><textarea name="notes" /></div>
-                    <div className="field full"><button className="button" type="submit">Record payment</button></div>
-                  </form>
-                </details>
-
-                <div className="payment-history">
-                  <h3>Payment history</h3>
-                  {payments.length === 0 ? <p>No payments recorded.</p> : null}
-                  {payments.map((payment) => (
-                    <div key={payment.id}><span>{new Date(payment.received_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })}<small>{titleCase(payment.method)} · {titleCase(payment.status)}{payment.provider_reference ? ` · ${payment.provider_reference}` : ""}</small></span><strong>{payment.status === "refunded" ? "−" : ""}{money(payment.amount)}</strong></div>
-                  ))}
-                </div>
+        {view === "billing" ? (
+          <section className="ro-view-panel ro-billing-view">
+            <header className="ro-view-heading"><div><span>Billing</span><h2>Invoice & payments.</h2><p>Only final money actions live here.</p></div></header>
+            <div className="ro-billing-grid">
+              <article className="ro-billing-summary">
+                <div><span>Approved work</span><strong>{money(approvedBeforeTax)}</strong></div><div><span>Estimated tax</span><strong>{money(approvedTax)}</strong></div><div className="total"><span>Approved total</span><strong>{money(approvedTotal)}</strong></div>
+                <form action={syncInvoice}><input type="hidden" name="repairOrderId" value={id} /><button className="button" type="submit">{invoice ? "Refresh invoice totals" : "Create invoice"}</button></form>
               </article>
-            ) : null}
-          </div>
-        </section>
 
-        <details className="admin-disclosure authorization-history">
-          <summary>Customer authorization audit trail · {authorizations.length}</summary>
-          <div className="authorization-history-body">
-            {authorizations.length === 0 ? <p>No line-level authorization decisions have been logged yet.</p> : null}
-            {authorizations.map((authorization) => {
-              const job = jobs.find((item) => item.id === authorization.ro_job_id);
-              return (
-                <div className="authorization-row" key={authorization.id}>
-                  <span><strong>{job ? `Line ${job.line_number}: ${job.title}` : "Repair order"}</strong><small>{new Date(authorization.authorized_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })} · {authorization.authorization_method} · recorded by {authorization.employee_name || "owner"}</small></span>
-                  <span>{titleCase(authorization.decision)}{authorization.authorized_amount !== null ? ` · ${money(authorization.authorized_amount)}` : ""}<small>{authorization.authorized_by_name}{authorization.authorized_by_phone ? ` · ${authorization.authorized_by_phone}` : ""}</small></span>
-                </div>
-              );
-            })}
-          </div>
-        </details>
+              {invoice ? (
+                <article className="ro-invoice-card">
+                  <header><div><span>{invoice.invoice_number}</span><h2>{titleCase(invoice.status)}</h2></div><strong>{money(invoice.balance_due)} due</strong></header>
+                  <div className="ro-invoice-numbers"><div><span>Total</span><b>{money(invoice.total)}</b></div><div><span>Paid</span><b>{money(invoice.amount_paid)}</b></div><div><span>Balance</span><b>{money(invoice.balance_due)}</b></div></div>
+                  <details><summary>Payment link & due date</summary><form action={updateInvoicePaymentLink} className="ro-billing-form"><input type="hidden" name="repairOrderId" value={id} /><input type="hidden" name="invoiceId" value={invoice.id} />
+                    <label>Provider<input name="paymentProvider" defaultValue={invoice.payment_provider || ""} /></label><label>Due<input name="dueAt" type="datetime-local" defaultValue={dateTimeLocal(invoice.due_at)} /></label><label className="full">Hosted payment URL<input name="hostedPaymentUrl" type="url" defaultValue={invoice.hosted_payment_url || ""} /></label><label className="full">Customer note<textarea name="customerNote" defaultValue={invoice.customer_note || ""} /></label><div className="full"><button className="button secondary" type="submit">Save payment details</button></div>
+                  </form></details>
+                  <details open={payments.length === 0 && Number(invoice.balance_due) > 0}><summary>Record payment / refund</summary><form action={recordPayment} className="ro-billing-form"><input type="hidden" name="repairOrderId" value={id} /><input type="hidden" name="invoiceId" value={invoice.id} />
+                    <label>Amount<input name="amount" type="number" min="0.01" step="0.01" defaultValue={invoice.balance_due > 0 ? Number(invoice.balance_due).toFixed(2) : ""} /></label>
+                    <label>Method<select name="method" defaultValue="card"><option value="cash">Cash</option><option value="card">Card</option><option value="check">Check</option><option value="zelle">Zelle</option><option value="ach">ACH</option><option value="bank_transfer">Bank transfer</option><option value="financing">Financing</option><option value="other">Other</option></select></label>
+                    <label>Status<select name="status" defaultValue="succeeded"><option value="succeeded">Succeeded</option><option value="pending">Pending</option><option value="failed">Failed</option><option value="refunded">Refunded</option><option value="void">Void</option></select></label>
+                    <label>Provider<input name="provider" /></label><label>Reference<input name="providerReference" /></label><label className="full">Notes<textarea name="notes" /></label><div className="full"><button className="button secondary" type="submit">Record transaction</button></div>
+                  </form></details>
+                  <div className="ro-payment-history"><h3>Payment history</h3>{payments.length === 0 ? <p className="admin-muted">No payments recorded.</p> : payments.map((payment) => <div key={payment.id}><span>{new Date(payment.received_at).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })}<small>{titleCase(payment.method)} · {titleCase(payment.status)}</small></span><strong>{money(payment.amount)}</strong></div>)}</div>
+                </article>
+              ) : <div className="ro-workspace-empty"><h2>No invoice yet.</h2><p>Create it only when approved work is ready for billing.</p></div>}
+            </div>
+          </section>
+        ) : null}
       </div>
     </main>
   );
