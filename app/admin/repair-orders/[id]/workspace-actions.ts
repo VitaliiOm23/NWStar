@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireOwner } from "@/lib/auth/owner";
 
 const authorizationStatuses = new Set(["pending", "approved", "deferred", "declined"]);
+const itemTypes = new Set(["labor", "part", "fee", "sublet", "discount"]);
 
 function raw(formData: FormData, name: string) {
   return String(formData.get(name) || "").trim();
@@ -102,5 +103,49 @@ export async function saveLineAuthorization(formData: FormData) {
   }
 
   if (error) console.error("RO workspace authorization save failed", error.message);
+  refresh(repairOrderId);
+}
+
+export async function addWorkspaceItem(formData: FormData) {
+  const repairOrderId = text(formData, "repairOrderId");
+  const jobId = text(formData, "jobId");
+  const itemType = raw(formData, "itemType");
+  if (!repairOrderId || !jobId || !itemTypes.has(itemType)) return;
+
+  const quantity = numberValue(formData, "quantity") ?? 1;
+  if (quantity <= 0) return;
+
+  const { supabase } = await requireOwner();
+  let unitPrice = numberValue(formData, "unitPrice");
+  let unit = raw(formData, "unit") || "ea";
+
+  if (itemType === "labor") {
+    const { data: ro, error: rateError } = await supabase
+      .from("repair_orders")
+      .select("labor_rate")
+      .eq("id", repairOrderId)
+      .single();
+    if (rateError || !ro) return;
+    unitPrice = Number(ro.labor_rate || 100);
+    unit = "hr";
+  }
+
+  if (unitPrice === null) unitPrice = 0;
+  if (unitPrice < 0) return;
+
+  const { error } = await supabase.from("ro_items").insert({
+    ro_job_id: jobId,
+    item_type: itemType,
+    description: raw(formData, "description") || (itemType === "labor" ? "Labor" : itemType === "part" ? "Part" : "RO item"),
+    part_number: text(formData, "partNumber"),
+    part_condition: text(formData, "partCondition"),
+    quantity,
+    unit,
+    unit_cost: numberValue(formData, "unitCost"),
+    unit_price: unitPrice,
+    taxable: formData.get("taxable") === "yes",
+  });
+
+  if (error) console.error("RO workspace item add failed", error.message);
   refresh(repairOrderId);
 }
