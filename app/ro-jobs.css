@@ -1,0 +1,54 @@
+.ro-workspace-page .ro-workspace-grid{grid-template-columns:minmax(0,1fr) 270px;grid-template-areas:"jobs jobs" "focus context";gap:14px}
+.ro-workspace-page .ro-line-rail{grid-area:jobs;position:static;display:grid;grid-template-columns:190px minmax(0,1fr) 210px;align-items:stretch;min-width:0;border-color:#2b3b33;background:#0a0f0d}
+.ro-workspace-page .ro-line-rail-head{border:0;border-right:1px solid #223029;padding:14px 16px;align-items:center}
+.ro-workspace-page .ro-line-rail-head>div{display:grid;gap:2px}
+.ro-workspace-page .ro-line-rail-head span{font-size:12px;color:#d6dfda;letter-spacing:.04em;text-transform:none}
+.ro-workspace-page .ro-line-rail-head strong{font-size:12px;color:#7fb497}
+.ro-workspace-page .ro-line-rail-head small{display:block;max-width:120px;line-height:1.35;color:#7f9188}
+.ro-workspace-page .ro-line-rail nav{display:flex;overflow-x:auto;min-width:0;scrollbar-width:thin}
+.ro-workspace-page .ro-line-rail nav>a{min-width:190px;max-width:250px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-content:center;gap:10px;padding:13px 15px;border:0;border-right:1px solid #1d2923;color:#c9d4cf}
+.ro-workspace-page .ro-line-rail nav>a:hover{background:#101813}
+.ro-workspace-page .ro-line-rail nav>a.active{background:#18241f;box-shadow:inset 0 -3px #7fb497}
+.ro-workspace-page .ro-line-rail nav>a>div:first-child span{font-size:9px;margin-bottom:4px;color:#7fb497;font-weight:900}
+.ro-workspace-page .ro-line-rail nav>a>div:first-child strong{font-size:13px;line-height:1.25}
+.ro-workspace-page .ro-line-rail nav>a>div:last-child{align-self:center}
+.ro-workspace-page .ro-line-rail nav>a small{font-size:9px}
+.ro-workspace-page .ro-line-rail nav>a b{font-size:11px}
+.ro-workspace-page .ro-add-line-simple{border:0;border-left:1px solid #223029;padding:0 14px;display:flex;align-items:center}
+.ro-workspace-page .ro-add-line-simple[open]{display:block;padding-bottom:10px}
+.ro-workspace-page .ro-add-line-simple summary{padding:15px 0;color:#b8ddca;font-size:12px}
+.ro-workspace-page .ro-add-line-simple form{min-width:180px}
+.ro-workspace-page .ro-line-focus{grid-area:focus;border-color:#2b3b33;overflow:hidden}
+.ro-workspace-page .ro-context-rail{grid-area:context}
+.ro-workspace-page .ro-line-focus-head{background:#0d1511;padding:17px 20px}
+.ro-workspace-page .ro-line-focus-head>div:first-child>span{color:#7fb497;font-size:9px}
+.ro-workspace-page .ro-line-focus-head h2{font-size:24px;margin:3px 0 5px}
+.ro-workspace-page .ro-line-focus-head p{font-size:13px;color:#a8b7b0}
+.ro-workspace-page .ro-line-focus-form{gap:12px;padding:16px 18px 18px;background:#0a0f0d}
+.ro-workspace-page .ro-two-fields{padding:12px;border:1px solid #202d27;background:#0c1210;gap:10px}
+.ro-workspace-page .ro-two-fields label{font-size:9px;color:#778a80}
+.ro-workspace-page .ro-two-fields input,.ro-workspace-page .ro-two-fields textarea{background:#080c0a;border-color:#26352e;padding:9px 10px}
+.ro-workspace-page .ro-line-focus-form>label{position:relative;padding:15px 15px 15px 58px;border:1px solid #25342d;background:#0d1310;gap:8px;font-size:12px;text-transform:none;letter-spacing:0;color:#d7e0dc}
+.ro-workspace-page .ro-line-focus-form>label::before{position:absolute;left:16px;top:16px;width:28px;height:28px;border:1px solid #4d6d5d;background:#14211a;color:#a9d0bd;display:grid;place-items:center;font-size:12px;font-weight:900;border-radius:999px}
+.ro-workspace-page .ro-line-focus-form>label:nth-of-type(1)::before{content:"1"}
+.ro-workspace-page .ro-line-focus-form>label:nth-of-type(2)::before{content:"2"}
+.ro-workspace-page .ro-line-focus-form>label:nth-of-type(3)::before{content:"3"}
+.ro-workspace-page .ro-line-focus-form>label:nth-of-type(1)::after{content:"DIAGNOSE";position:absolute;left:58px;top:17px;font-size:8px;letter-spacing:.11em;color:#71867a;font-weight:900}
+.ro-workspace-page .ro-line-focus-form>label:nth-of-type(2)::after{content:"RECOMMEND";position:absolute;left:58px;top:17px;font-size:8px;letter-spacing:.11em;color:#71867a;font-weight:900}
+.ro-workspace-page .ro-line-focus-form>label:nth-of-type(3)::after{content:"REPAIR NOTES";position:absolute;left:58px;top:17px;font-size:8px;letter-spacing:.11em;color:#71867a;font-weight:900}
+.ro-workspace-page .ro-line-focus-form>label{padding-top:32px}
+.ro-workspace-page .ro-line-focus-form>label textarea{min-height:92px;background:#080c0a;border-color:#2b3b33;font-size:13px;line-height:1.45}
+.ro-workspace-page .ro-line-focus-form>label:nth-of-type(1) textarea,.ro-workspace-page .ro-line-focus-form>label:nth-of-type(2) textarea{min-height:112px}
+.ro-workspace-page .ro-save-row{justify-content:flex-end;border-top:1px solid #1e2924;padding-top:12px}
+.ro-workspace-page .ro-save-row span{display:none}
+.ro-workspace-page .ro-line-items-simple{background:#0b100e;border-top:1px solid #30443a}
+.ro-workspace-page .ro-section-bar{padding:14px 18px;background:#101813}
+.ro-workspace-page .ro-section-bar span{font-size:12px;text-transform:none;letter-spacing:0;color:#d7e0dc}
+.ro-workspace-page .ro-section-bar>div::before{content:"4";width:28px;height:28px;border:1px solid #4d6d5d;background:#14211a;color:#a9d0bd;display:grid;place-items:center;font-size:12px;font-weight:900;border-radius:999px;margin-right:3px}
+.ro-workspace-page .ro-section-bar>div::after{content:"LABOR + PARTS";font-size:8px;letter-spacing:.1em;color:#71867a;font-weight:900;margin-left:2px}
+.ro-workspace-page .ro-add-items-row{padding-top:10px}
+.ro-workspace-page .ro-context-card{border-color:#26362e}
+.ro-workspace-page .ro-context-card>span{font-size:9px}
+.ro-workspace-page .ro-workspace-empty{grid-area:focus}
+@media(max-width:1100px){.ro-workspace-page .ro-workspace-grid{grid-template-columns:minmax(0,1fr);grid-template-areas:"jobs" "focus" "context"}.ro-workspace-page .ro-context-rail{grid-template-columns:repeat(3,1fr);position:static}.ro-workspace-page .ro-line-rail{grid-template-columns:165px minmax(0,1fr) 185px}}
+@media(max-width:760px){.ro-workspace-page .ro-line-rail{grid-template-columns:1fr;display:block}.ro-workspace-page .ro-line-rail-head{border-right:0;border-bottom:1px solid #223029}.ro-workspace-page .ro-line-rail nav{display:flex}.ro-workspace-page .ro-line-rail nav>a{min-width:170px}.ro-workspace-page .ro-add-line-simple{border-left:0;border-top:1px solid #223029;display:block;padding:0 14px}.ro-workspace-page .ro-two-fields{grid-template-columns:1fr}.ro-workspace-page .ro-line-focus-form>label{padding-left:50px}.ro-workspace-page .ro-line-focus-form>label::before{left:12px}.ro-workspace-page .ro-line-focus-form>label::after{left:50px}.ro-workspace-page .ro-context-rail{grid-template-columns:1fr}}
