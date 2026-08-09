@@ -10,6 +10,7 @@ import "./tech-extensions.css";
 import "./workforce.css";
 import "./ro-workspace.css";
 import "./ro-jobs.css";
+import "./ro-simple.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://nwstardiagnostics.com"),
